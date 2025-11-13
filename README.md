@@ -70,6 +70,32 @@ This project uses `uv` for managing Python virtual environments and dependencies
   uv add package-name
   ```
 
+## Evaluation Script (eval.py)
+
+The [`eval.py`](eval.py ) script provides the `GeoNLIEvaluator` class for evaluating GeoNLI (Geospatial Natural Language Inference) tasks. It supports evaluation of captioning, grounding, binary, numeric, and semantic predictions using metrics like BERT-BLEU, IoU, cosine similarity, and more.
+
+### Key Features
+- Loads predictions and ground truths from JSON files.
+- Computes weighted final scores for multiple tasks.
+- Integrates with Weights & Biases (wandb) for logging.
+- Handles coordinate conversions (pixels, meters, normalized).
+
+### Usage
+Run the script directly for example evaluation:
+```bash
+python eval.py
+```
+This loads a sample JSON file, evaluates predictions against themselves (for demonstration), and logs results to wandb.
+
+To use in code:
+```python
+from eval import GeoNLIEvaluator
+
+evaluator = GeoNLIEvaluator()
+predictions, metadata = evaluator.load_predictions_from_json('path/to/response.json')
+ground_truths = {...}  # Define ground truths
+scores = evaluator.evaluate_all(predictions, ground_truths, metadata)
+```
 
 Adjust the command based on your project's entry point.
 

@@ -1,0 +1,6 @@
+transformers
+torch
+numpy
+python-dotenv
+wandb
+shapely
