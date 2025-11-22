@@ -4,3 +4,8 @@ numpy
 python-dotenv
 wandb
 shapely
+datasets
+pillow
+torchvision
+jupyter 
+ipywidgets

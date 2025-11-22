@@ -242,12 +242,12 @@ class GeoNLIEvaluator:
             return intersection.area
         except:
             return 0.0
-    
-    def obb_to_polygon(self, obb: List[float]) -> np.ndarray:
+
+    def obb_to_polygon(self, obb: List[float], angle_in_degrees: bool = True) -> np.ndarray:
 
         cx, cy, w, h, angle = obb
         
-        if abs(angle) > 2 * np.pi:
+        if angle_in_degrees:
             angle = np.radians(angle)
         
         w_half = w / 2

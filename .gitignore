@@ -4,3 +4,5 @@ venv
 VRSBench
 sample_dataset_inter_iit_v1_2
 .vscode
+vrs.ipynb
+train.py
