@@ -29,8 +29,8 @@ This project uses `uv` for managing Python virtual environments and dependencies
 
 2. Clone the repository :
    ```bash
-   git clone https://github.com/Vijayavallabh/Team_46.git
-   cd Team_46
+   git clone https://github.com/Vijayavallabh/ISRO-GEONLI.git
+   cd ISRO-GEONLI
    git clone https://huggingface.co/datasets/xiang709/VRSBench
    cd VRSBench
    unzip Images_train.zip
