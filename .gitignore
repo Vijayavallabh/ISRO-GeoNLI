@@ -2,7 +2,13 @@
 venv
 .env
 VRSBench
-sample_dataset_inter_iit_v1_2
+sample_dataset_inter_iit_v1_3
 .vscode
 vrs.ipynb
 train.py
+train_1.py
+*.log
+__pycache__
+*.pyc
+kimi_vl_vrsbench_lora
+*.zip

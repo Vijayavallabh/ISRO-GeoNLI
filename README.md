@@ -35,7 +35,12 @@ This project uses `uv` for managing Python virtual environments and dependencies
    cd VRSBench
    unzip Images_train.zip
    unzip Images_val.zip
+   unzip Annotations_train.zip
+   unzip ANnotations_val.zip
    ```
+
+## Important
+Navigate to VRSBench folder and then in Annotations_train folder, go to P0212_0000.json which has the last qa pair ques_id as "", change it to 5. Then go to Annotations_val folder, go to P1732_0000.json has first qa pair ques_id as "1", change it to integer.
 
 ### Create and Activate Virtual Environment
 

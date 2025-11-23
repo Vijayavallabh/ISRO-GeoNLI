@@ -23,6 +23,9 @@ def _open_image(root: Path, rel_path: str) -> Image.Image:
 
 
 def _parse_example(example: Dict, image_root: Path) -> VRSSample:
+    # if "objects" not in example:
+    #     print(f"Missing 'objects' in example: {example}")
+    #     return None  # Skip if missing
     bbox = [obj["obj_corner"] for obj in example["objects"]]
     bbox_questions = [
         f"Give me the location of the {obj['referring_sentence']}"
@@ -51,7 +54,6 @@ class VRSStreamingSplit(Iterable[VRSSample]):
             if self.split_type == "all":
                 yield _parse_example(example, self.image_root)
             else:
-                # Use hash of image path for reproducible 80-20 split (val if hash % 5 == 0)
                 hash_val = int(hashlib.md5(example["image"].encode()).hexdigest(), 16)
                 remainder = hash_val % 5
                 if (self.split_type == "train" and remainder != 0) or (self.split_type == "val" and remainder == 0):
@@ -65,5 +67,17 @@ def build_vrs_dataloaders() -> Dict[str, VRSStreamingSplit]:
     return {
         "train": VRSStreamingSplit(train_ds, "VRSBench/Images_train", split_type="train"),
         "val": VRSStreamingSplit(train_ds, "VRSBench/Images_train", split_type="val"),
+        "test": VRSStreamingSplit(test_ds, "VRSBench/Images_val", split_type="all"),
+    }
+
+def build_vrs_dataloaders_train_test_only() -> Dict[str, VRSStreamingSplit]:
+    """
+    Function that provides only train and test splits without any validation split.
+    """
+    train_ds = load_dataset("VRSBench", split="train", streaming=True)
+    test_ds = load_dataset("VRSBench", split="validation", streaming=True)
+    
+    return {
+        "train": VRSStreamingSplit(train_ds, "VRSBench/Images_train", split_type="all"),
         "test": VRSStreamingSplit(test_ds, "VRSBench/Images_val", split_type="all"),
     }

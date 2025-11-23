@@ -1,5 +1,5 @@
 transformers
-torch
+torch==2.9.0
 numpy
 python-dotenv
 wandb
@@ -9,3 +9,8 @@ pillow
 torchvision
 jupyter 
 ipywidgets
+tiktoken
+peft
+accelerate
+bitsandbytes
+tensorboardX
