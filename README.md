@@ -42,6 +42,29 @@ This project uses `uv` for managing Python virtual environments and dependencies
 ## Important
 Navigate to VRSBench folder and then in Annotations_train folder, go to P0212_0000.json which has the last qa pair ques_id as "", change it to 5. Then go to Annotations_val folder, go to P1732_0000.json has first qa pair ques_id as "1", change it to integer.
 
+### Train MLP Adapter
+
+```bash
+torchrun \
+    --nnodes=$NUM_NODES \
+    --nproc_per_node=$NUM_GPUS_PER_NODE \
+    --node_rank=$NODE_RANK \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    train.py \
+    --vision_encoder $VISION_ENCODER \
+    --language_decoder $LANGUAGE_DECODER \
+    --dataset_name $DATASET \
+    --batch_size $BATCH_SIZE \
+    --output_dir $OUTPUT_DIR \
+    --num_epochs 3 \
+    --learning_rate 1e-4 \
+    --warmup_steps 1000 \
+    --bf16 \
+    --wandb_project "vlm-adapter-multinode"
+    
+```
+
 ### Create and Activate Virtual Environment
 
 1. Create a virtual environment using `uv`:
@@ -75,6 +98,7 @@ Navigate to VRSBench folder and then in Annotations_train folder, go to P0212_00
   uv sync
   ```
 - To add new dependencies:
+
   ```bash
   uv add package-name
   ```
