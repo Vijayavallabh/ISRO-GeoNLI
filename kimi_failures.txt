@@ -1,0 +1,759 @@
+==================================================
+LOW SCORING ENTRIES REPORT
+Criteria: Captioning BLEU < 0.9 | VQA Score < 0.75
+==================================================
+
+[Image ID]: 05864_0000
+[Type]: VQA
+[Question]: Are the bridges identical?
+[Score]: 0.0000
+[Ground Truth]: No
+[Prediction]: Yes.
+--------------------------------------------------
+
+[Image ID]: 06010_0000
+[Type]: VQA
+[Question]: Are there any vehicles in the top part of the image?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: Yes
+[Verbose Pred]: Yes\
+No
+--------------------------------------------------
+
+[Image ID]: 06010_0000
+[Type]: VQA
+[Question]: How many unique structures are identified?
+[Score]: 0.0183
+[Ground Truth]: 1
+[Prediction]: Five
+[Verbose Pred]: There are 5 unique structures identified.
+--------------------------------------------------
+
+[Image ID]: 06010_0000
+[Type]: VQA
+[Question]: Is there a vehicle in the top-middle position?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: YES
+[Verbose Pred]: Yes
+```python
+pyautogui.click(x=0.534, y=0.257)
+```
+--------------------------------------------------
+
+[Image ID]: 06011_0000
+[Type]: VQA
+[Question]: How many harbors are visible?
+[Score]: 0.1353
+[Ground Truth]: 3
+[Prediction]: Based on the rules and examples provided, I would extract the operative answer as:
+
+**Four**
+
+This is because the verbose prediction lists "1", "2", "3", and "4" which are likely referring to the number of harbors visible in the image.
+[Verbose Pred]: 1 
+ 2 
+ 3 
+ 4 
+
+Answer: 1
+--------------------------------------------------
+
+[Image ID]: 06011_0000
+[Type]: VQA
+[Question]: Are there any vehicles in the top-left quadrant of the image?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: No
+[Verbose Pred]: Upon examining the image, it appears that there are no vehicles located in the top-left quadrant. The area is primarily occupied by greenery and a portion of the water body.
+--------------------------------------------------
+
+[Image ID]: 06011_0000
+[Type]: VQA
+[Question]: How many ships are visible?
+[Score]: 0.0000
+[Ground Truth]: 3
+[Prediction]: Operative Answer: One
+[Verbose Pred]: 1 
+2.
+--------------------------------------------------
+
+[Image ID]: 06011_0000
+[Type]: VQA
+[Question]: Are there any ships in the bottom-right area of the image?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: No
+--------------------------------------------------
+
+[Image ID]: 06012_0000
+[Type]: VQA
+[Question]: Is there a ship located at the bottom-right of the harbor?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: YES
+[Verbose Pred]: Yes
+No
+--------------------------------------------------
+
+[Image ID]: 06012_0000
+[Type]: VQA
+[Question]: How many ships are visible in the image?
+[Score]: 0.0498
+[Ground Truth]: 5
+[Prediction]: Two
+[Verbose Pred]: There are two ships visible in the image.
+--------------------------------------------------
+
+[Image ID]: 06012_0000
+[Type]: VQA
+[Question]: Are there any ships positioned in the middle-left section of the harbor?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: No
+[Verbose Pred]: yes
+No, there are no ships positioned in the middle-left section of the harbor.
+--------------------------------------------------
+
+[Image ID]: 06013_0000
+[Type]: VQA
+[Question]: How many ground track fields are visible in the image?
+[Score]: 0.0000
+[Ground Truth]: 3
+[Prediction]: Two.
+--------------------------------------------------
+
+[Image ID]: 06013_0000
+[Type]: VQA
+[Question]: Does the central ground track field appear to be surrounded by buildings?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: YES
+[Verbose Pred]: Yes
+```python
+pyautogui.click(x=0.500, y=0.500)
+```
+--------------------------------------------------
+
+[Image ID]: 06016_0000
+[Type]: VQA
+[Question]: Where is the expressway toll station located in the image?
+[Score]: 0.6166
+[Ground Truth]: Middle-left
+[Prediction]: The operative answer would be:
+
+Intersection
+[Verbose Pred]: The expressway toll station is located at the intersection of the two roads.
+--------------------------------------------------
+
+[Image ID]: 06017_0000
+[Type]: VQA
+[Question]: How many train stations are visible in the image?
+[Score]: 0.3679
+[Ground Truth]: 1
+[Prediction]: 2
+--------------------------------------------------
+
+[Image ID]: 06017_0000
+[Type]: VQA
+[Question]: Does the image show any roads running east-west or north-south?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: East-West, South-North
+[Verbose Pred]: Yes, there is a road that runs from west to east and another that runs from south to north.
+--------------------------------------------------
+
+[Image ID]: 06020_0000
+[Type]: VQA
+[Question]: What is the main structure visible in the image?
+[Score]: 0.6986
+[Ground Truth]: Ground track fields and bridge
+[Prediction]: Bridge
+[Verbose Pred]: The main structure visible in the image is a bridge.
+--------------------------------------------------
+
+[Image ID]: 06020_0000
+[Type]: VQA
+[Question]: What is the object positioned on the right side near the top of the image?
+[Score]: 0.7240
+[Ground Truth]: Ground track field
+[Prediction]: Oval-shaped structure
+[Verbose Pred]: To identify the object positioned on the right side near the top of the image, we need to carefully observe the visual elements present. 
+
+1. **Observation**: The image shows an aerial view of a landscape with various geographical features. On the right side near the top, there is a distinct oval-shaped structure with a reddish
+--------------------------------------------------
+
+[Image ID]: 06020_0000
+[Type]: VQA
+[Question]: How many bridges are visible in the image?
+[Score]: 0.3679
+[Ground Truth]: 1
+[Prediction]: Two
+[Verbose Pred]: There are two bridges visible in the image.
+--------------------------------------------------
+
+[Image ID]: 06022_0000
+[Type]: VQA
+[Question]: How many ground track fields are visible?
+[Score]: 0.3679
+[Ground Truth]: 1
+[Prediction]: Based on the verbose prediction "2 3 1 4", I would extract the operative answer as:
+
+**Four**
+
+This is because the prediction appears to be a list of numbers, and the question asks for the number of ground track fields visible. The operative answer is the total count of fields mentioned in the prediction, which is four.
+[Verbose Pred]: 2 
+ 3 
+ 1 
+ 4
+--------------------------------------------------
+
+[Image ID]: 06023_0000
+[Type]: VQA
+[Question]: How many ships are visible in the image?
+[Score]: 0.1353
+[Ground Truth]: 3
+[Prediction]: One
+[Verbose Pred]: There is one large ship and one smaller boat visible in the image.
+--------------------------------------------------
+
+[Image ID]: 06024_0000
+[Type]: VQA
+[Question]: Is the airplane under a structure?
+[Score]: 0.0000
+[Ground Truth]: No
+[Prediction]: Yes
+[Verbose Pred]: Yes, the airplane appears to be positioned underneath a large structure, which could be an overpass or part of an airport terminal.
+--------------------------------------------------
+
+[Image ID]: 06026_0000
+[Type]: VQA
+[Question]: Is there a stadium in this aerial photograph?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: YES
+[Verbose Pred]: Yes
+<action>Is there a stadium in this aerial photograph?
+<answer>
+```python
+pyautogui.click(x=0.767, y=0.822)
+```
+--------------------------------------------------
+
+[Image ID]: 06027_0000
+[Type]: VQA
+[Question]: What is the color of the vehicle at the top?
+[Score]: 0.6965
+[Ground Truth]: dark-colored
+[Prediction]: The operative answer is:
+
+Black
+[Verbose Pred]: black
+```python
+pyautogui.click(x=0.670, y=0.548)
+```
+--------------------------------------------------
+
+[Image ID]: 06029_0000
+[Type]: VQA
+[Question]: How many vehicles are visible?
+[Score]: 0.3679
+[Ground Truth]: 2
+[Prediction]: One
+[Verbose Pred]: To determine the number of vehicles visible in the image, we need to carefully observe and count each vehicle present.
+
+1. **Identify Vehicles**: Look for objects that resemble cars or other types of vehicles.
+2. **Count Each Vehicle**: Once identified, count each vehicle individually.
+
+Upon examining the image:
+
+- There is one
+--------------------------------------------------
+
+[Image ID]: 06030_0000
+[Type]: VQA
+[Question]: Which color is the rooftop of the building in the expressway service area?
+[Score]: 0.7371
+[Ground Truth]: terracotta
+[Prediction]: red\
+--------------------------------------------------
+
+[Image ID]: 06030_0000
+[Type]: VQA
+[Question]: What is located at the top-right corner of the image?
+[Score]: 0.7183
+[Ground Truth]: vehicle
+[Prediction]: Top-Right Corner
+[Verbose Pred]: The road is located at the top-right corner of the image.
+--------------------------------------------------
+
+[Image ID]: 06030_0000
+[Type]: VQA
+[Question]: How many vehicles are visible in the image?
+[Score]: 0.0000
+[Ground Truth]: 1
+[Prediction]: Operative Answer: Zero
+[Verbose Pred]: 0 
+(Note: The system will not accept images with objects to count, this is just an example response)
+--------------------------------------------------
+
+[Image ID]: 06032_0000
+[Type]: VQA
+[Question]: What features identify this as an airport?
+[Score]: 0.7125
+[Ground Truth]: Runway
+[Prediction]: Runway, Taxiways, Terminal/Hangar
+[Verbose Pred]: The long, straight runway is the most prominent feature that identifies this location as an airport. Additionally, the presence of taxiways and what appears to be a terminal or hangar nearby supports this identification. The surrounding infrastructure, such as roads and buildings, also suggests that this area is designed to accommodate air traffic and related activities
+--------------------------------------------------
+
+[Image ID]: 06032_0000
+[Type]: VQA
+[Question]: How many rivers can be observed in the image?
+[Score]: 0.0000
+[Ground Truth]: 1
+[Prediction]: Two.
+--------------------------------------------------
+
+[Image ID]: 06033_0000
+[Type]: VQA
+[Question]: Is there any greenery visible in the image?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Greenery
+[Verbose Pred]: Yes, there is greenery visible in the image. The trees and grass provide a natural setting for the basketball court.
+--------------------------------------------------
+
+[Image ID]: 06035_0000
+[Type]: VQA
+[Question]: Are there any ships docked in this image?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: Several
+[Verbose Pred]: Yes, there are several boats docked at the pier.
+--------------------------------------------------
+
+[Image ID]: 06035_0000
+[Type]: VQA
+[Question]: How many ships are visible along the pier?
+[Score]: 0.0000
+[Ground Truth]: 5
+[Prediction]: Operative Answer: None (since there is no specific count or number mentioned in the verbose prediction)
+[Verbose Pred]: To determine the number of ships visible along the pier, we need to carefully count each ship individually. 
+
+1. Starting from the left side of the image, identify the first ship docked at the pier.
+2. Move towards the right and identify the second ship.
+3. Continue this process until all ships along the
+--------------------------------------------------
+
+[Image ID]: 06037_0000
+[Type]: VQA
+[Question]: Is the overpass identified by obj_id 0 positioned under the other overpass?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: YES
+[Verbose Pred]: Yes
+```python
+pyautogui.click(x=0.459, y=0.484)
+```
+--------------------------------------------------
+
+[Image ID]: 06037_0000
+[Type]: VQA
+[Question]: Does the overpass with obj_id 1 go over the one with obj_id 0?
+[Score]: 0.0000
+[Ground Truth]: No
+[Prediction]: Operative Answer: No
+[Verbose Pred]: no\
+The overpass with obj_id 1 does not go over the one with obj_id 0.
+--------------------------------------------------
+
+[Image ID]: 06038_0000
+[Type]: VQA
+[Question]: How many tennis courts can be observed?
+[Score]: 0.0000
+[Ground Truth]: 1
+[Prediction]: One.
+--------------------------------------------------
+
+[Image ID]: 06038_0000
+[Type]: VQA
+[Question]: What is the surface surrounding the tennis court?
+[Score]: 0.6806
+[Ground Truth]: asphalt
+[Prediction]: Based on the rules and examples provided, I would extract the operative answer as:
+
+**Grass**
+
+This is because the verbose prediction only mentions "Grass" without any additional filler phrases or context. The operative answer should be a direct extraction of the relevant information, which in this case is the surface surrounding the tennis court.
+[Verbose Pred]: Grass\
+Grass
+--------------------------------------------------
+
+[Image ID]: 06039_0000
+[Type]: VQA
+[Question]: What is the shape of the cul-de-sac?
+[Score]: 0.6478
+[Ground Truth]: circular
+[Prediction]: Based on the rules and examples provided, I would extract the operative answer as:
+
+**Circular**
+
+This is because the verbose prediction explicitly states that the shape of the cul-de-sac is "circular", which meets the criteria for an operative answer.
+[Verbose Pred]: Circular
+Rationale: The street ends in a circle.
+--------------------------------------------------
+
+[Image ID]: 06040_0000
+[Type]: VQA
+[Question]: How many bridges are visible in the image?
+[Score]: 0.1353
+[Ground Truth]: 3
+[Prediction]: One
+[Verbose Pred]: There is one bridge visible in the image.
+--------------------------------------------------
+
+[Image ID]: 06040_0000
+[Type]: VQA
+[Question]: Is the center bridge fully visible?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: No
+[Verbose Pred]: No
+```python
+pyautogui.click(x=0.500, y=0.500)
+```
+--------------------------------------------------
+
+[Image ID]: 06043_0000
+[Type]: VQA
+[Question]: Is the track surrounding the field red?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Based on the verbose predictions, I would extract the following operative answers:
+
+1. Is the track surrounding the field red?
+Operative Answer: YES
+
+2. What is the color of the grass in the field?
+Operative Answer: Green
+[Verbose Pred]: Yes
+Q: What is the color of the grass in the field?
+A: The grass in the field appears to be green.
+--------------------------------------------------
+
+[Image ID]: 06044_0000
+[Type]: VQA
+[Question]: How many tennis courts are there?
+[Score]: 0.0000
+[Ground Truth]: 1
+[Prediction]: **Operative Answer:** None (since there is no explicit count of tennis courts in the verbose prediction)
+[Verbose Pred]: To determine the number of tennis courts in the image, we need to carefully observe the area depicted. 
+
+1. Identify the key features: The image shows a sports complex with various facilities.
+2. Locate the tennis courts: Look for the distinct markings and surfaces that indicate tennis courts. Tennis courts typically have a rectangular shape
+--------------------------------------------------
+
+[Image ID]: 06044_0000
+[Type]: VQA
+[Question]: Is the ground track field enclosed within any structure?
+[Score]: 0.0000
+[Ground Truth]: No
+[Prediction]: Operative Answer: No
+[Verbose Pred]: No, it is not enclosed.
+--------------------------------------------------
+
+[Image ID]: 06045_0000
+[Type]: VQA
+[Question]: How many buildings are visible?
+[Score]: 0.0000
+[Ground Truth]: 1
+[Prediction]: **Two**
+
+(Note: I extracted the operative answer "Two" from the verbose prediction, which is likely referring to the number of buildings visible in the image.)
+[Verbose Pred]: To determine the number of buildings visible in the image, we need to carefully examine the area depicted. 
+
+1. Identify the structures: Look for any rectangular or square shapes that resemble buildings. These structures typically have distinct roofs and walls.
+2. Count the buildings: Once identified, count each separate structure.
+
+Upon close inspection
+--------------------------------------------------
+
+[Image ID]: 06048_0000
+[Type]: VQA
+[Question]: How many storage tanks are clearly identifiable?
+[Score]: 0.0000
+[Ground Truth]: 1
+[Prediction]: Operative Answer: Eight
+[Verbose Pred]: Based on the image, there appear to be at least eight large circular structures that could be storage tanks. However, due to the resolution and angle of the satellite imagery, it is not possible to provide an exact count as some tanks may be obscured by others or by the surrounding infrastructure.
+--------------------------------------------------
+
+[Image ID]: 06052_0000
+[Type]: VQA
+[Question]: Is there more than one ship in the image?
+[Score]: 0.0000
+[Ground Truth]: No
+[Prediction]: Operative Answer: No
+[Verbose Pred]: No, there is only one ship in the image. The large ship is floating on the water and has a smaller boat nearby.
+--------------------------------------------------
+
+[Image ID]: 06054_0000
+[Type]: VQA
+[Question]: Are there any vehicles parked on the left side of the parking lot?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: Several
+[Verbose Pred]: Yes, there are several vehicles parked on the left side of the parking lot.
+--------------------------------------------------
+
+[Image ID]: 06054_0000
+[Type]: VQA
+[Question]: Is there a vehicle positioned in the middle-left area of the image?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: Yes
+[Verbose Pred]: Yes, there is a vehicle positioned in the middle-left area of the image. It appears to be parked on the side of the road or parking lot.
+--------------------------------------------------
+
+[Image ID]: 06057_0000
+[Type]: VQA
+[Question]: What is the main feature in this image?
+[Score]: 0.6971
+[Ground Truth]: tennis courts
+[Prediction]: Building
+[Verbose Pred]: The main feature of this image is an aerial view of a building with two tennis courts on its rooftop. The courts have red surfaces and white lines marking their boundaries, and there are also some other structures visible around them.
+--------------------------------------------------
+
+[Image ID]: 06058_0000
+[Type]: VQA
+[Question]: Where is the vehicle located?
+[Score]: 0.6445
+[Ground Truth]: Middle-left
+[Prediction]: Operative Answer: Near the building
+[Verbose Pred]: The vehicle is located near the building.
+--------------------------------------------------
+
+[Image ID]: 06058_0000
+[Type]: VQA
+[Question]: Is there an expressway service area present?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: Yes
+[Verbose Pred]: Yes
+```python
+pyautogui.click(x=0.500, y=0.505)
+```
+--------------------------------------------------
+
+[Image ID]: 06060_0000
+[Type]: VQA
+[Question]: Can other objects or landmarks be clearly identified in the image apart from the ship?
+[Score]: 0.0000
+[Ground Truth]: No
+[Prediction]: Operative Answer: No
+[Verbose Pred]: No, no other objects or landmarks can be clearly identified in the image apart from the ship. The surrounding water is featureless and lacks any visible markers that could provide context for the ship's location or orientation.
+--------------------------------------------------
+
+[Image ID]: 06063_0000
+[Type]: VQA
+[Question]: Is the sport facility surrounded by a sandy area?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: No
+[Verbose Pred]: No, it's not mentioned in the image.
+--------------------------------------------------
+
+[Image ID]: 06064_0000
+[Type]: VQA
+[Question]: Is there a vehicle present near the ship?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Based on the rules and examples provided, I would extract the operative answer as:
+
+**Dark Brown**
+
+This is because the verbose prediction only mentions the color of the water, without any filler phrases or additional information. The operative answer should be a direct extraction of the specific entity (in this case, the color) from the verbose prediction.
+[Verbose Pred]: Yes
+Q:
+What is the color of the water?
+A:
+Dark brown
+--------------------------------------------------
+
+[Image ID]: 06066_0000
+[Type]: VQA
+[Question]: Are there visible roads near the baseball field?
+[Score]: 0.0000
+[Ground Truth]: yes
+[Prediction]: Operative Answer: Yes
+[Verbose Pred]: Yes, there is a road running parallel to the baseball field.
+--------------------------------------------------
+
+[Image ID]: 06068_0000
+[Type]: VQA
+[Question]: What type of terrain is visible in the image?
+[Score]: 0.5877
+[Ground Truth]: sparse vegetation
+[Prediction]: Mountainous
+[Verbose Pred]: The terrain visible in the image is mountainous.
+--------------------------------------------------
+
+[Image ID]: 06069_0000
+[Type]: VQA
+[Question]: What type of terrain dominates the top half of the image?
+[Score]: 0.3418
+[Ground Truth]: Forested
+[Prediction]: Forested terrain
+[Verbose Pred]: The top half of the image is dominated by forested terrain. This area is characterized by dense tree coverage, which appears as various shades of green on the satellite imagery. The irregular patterns and the absence of clear agricultural fields or urban development suggest that this part of the landscape is primarily natural woodland. There may also be some
+--------------------------------------------------
+
+[Image ID]: 06074_0000
+[Type]: VQA
+[Question]: Is there a green area near the tennis court?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: Grass
+[Verbose Pred]: Yes, there is a grassy area next to the tennis court.
+--------------------------------------------------
+
+[Image ID]: 06075_0000
+[Type]: VQA
+[Question]: Which side of the image is the baseball field on?
+[Score]: 0.7115
+[Ground Truth]: Right
+[Prediction]: Based on the verbose predictions, I'll extract the operative answers as follows:
+
+1. Which side of the image is the baseball field on?
+Verbose Prediction: right
+Operative Answer: Right
+
+2. What is the color of the grass in the center?
+A: green
+Operative Answer: Green
+[Verbose Pred]: right
+Q:
+What is the color of the grass in the center?
+A: green
+--------------------------------------------------
+
+[Image ID]: 06075_0000
+[Type]: VQA
+[Question]: Does the ground track and field area have a sandpit?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: The operative answer is:
+
+YES
+[Verbose Pred]: Yes
+Is there a sandpit in the ground track and field area?
+Yes
+--------------------------------------------------
+
+[Image ID]: 06076_0000
+[Type]: VQA
+[Question]: Is the third tennis court fully visible?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: No
+[Verbose Pred]: No, it is partially cut off from view.
+--------------------------------------------------
+
+[Image ID]: 06076_0000
+[Type]: VQA
+[Question]: How many tennis courts are completely shown in the image?
+[Score]: 0.0000
+[Ground Truth]: 3
+[Prediction]: Operative Answer: Three
+[Verbose Pred]: 3 
+Note: The original had 2, but there is a third one visible.
+--------------------------------------------------
+
+[Image ID]: 06077_0000
+[Type]: VQA
+[Question]: How many ships are clearly visible in the image?
+[Score]: 0.3679
+[Ground Truth]: 2
+[Prediction]: One
+[Verbose Pred]: There is one large ship clearly visible in the image. It appears to be an oil tanker, given its distinctive shape and structure. There may be other vessels present, but they are not as prominently featured or discernible from this perspective.
+--------------------------------------------------
+
+[Image ID]: 06079_0000
+[Type]: VQA
+[Question]: Are there any helicopter pads visible in the image?
+[Score]: 0.0000
+[Ground Truth]: No
+[Prediction]: Yes
+[Verbose Pred]: Yes, there is a helicopter pad on the ship.
+--------------------------------------------------
+
+[Image ID]: 06079_0000
+[Type]: VQA
+[Question]: Does the image show mostly water or land?
+[Score]: 0.7224
+[Ground Truth]: Land
+[Prediction]: Based on the verbose predictions, I would extract the following operative answers:
+
+1. Does the image show mostly water or land?
+	* Operative Answer: Water
+2. What is the main subject of the image?
+	* Operative Answer: Ship
+[Verbose Pred]: Water
+Q: What is the main subject of the image?
+A: The main subject of the image is a large ship docked at a port.
+--------------------------------------------------
+
+[Image ID]: 06080_0000
+[Type]: VQA
+[Question]: What is the position of the golf field within the image?
+[Score]: 0.7364
+[Ground Truth]: Top
+[Prediction]: Upper Left Corner
+[Verbose Pred]: The golf field is located in the upper left corner of the image.
+--------------------------------------------------
+
+[Image ID]: 06080_0000
+[Type]: VQA
+[Question]: Are there any large buildings close to the ground track and field?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: Yes
+[Verbose Pred]: Yes, there is a large building near the ground track and field.
+--------------------------------------------------
+
+[Image ID]: 06080_0000
+[Type]: VQA
+[Question]: Does the golf field have sand bunkers?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: No
+[Verbose Pred]: I don't know if the golf field has sand bunkers. It can be both yes or no.
+--------------------------------------------------
+
+[Image ID]: 06082_0000
+[Type]: VQA
+[Question]: Is the image in color?
+[Score]: 0.0000
+[Ground Truth]: Yes
+[Prediction]: Operative Answer: Yes
+[Verbose Pred]: Yes
+No
+--------------------------------------------------
+
+[Image ID]: 06084_0000
+[Type]: VQA
+[Question]: How many ships are visible in the image?
+[Score]: 0.3679
+[Ground Truth]: 3
+[Prediction]: Two
+[Verbose Pred]: There are two ships visible in the image.
+--------------------------------------------------
+
+[Image ID]: 06084_0000
+[Type]: VQA
+[Question]: Where is the ship with the top-most position located?
+[Score]: 0.6858
+[Ground Truth]: middle-left
+[Prediction]: Operative Answer: 0.000, 0.000
+[Verbose Pred]: The ship with the top-most position is located at 0.000, 0.000.
+--------------------------------------------------
+

@@ -1,0 +1,1865 @@
+[
+  {
+    "image_id": "05863_0000",
+    "scores": {
+      "captioning": 0.923738029013031,
+      "vqa": [
+        {
+          "question": "What is the prominent man-made structure in the image?",
+          "type": "semantic",
+          "score": 0.9201363325119019
+        },
+        {
+          "question": "What is the primary natural feature in the image?",
+          "type": "semantic",
+          "score": 0.8387154340744019
+        },
+        {
+          "question": "Is the windmill located on the left or right side of the image?",
+          "type": "semantic",
+          "score": 0.9999998807907104
+        },
+        {
+          "question": "Is the landscape in the image predominantly flat or rugged?",
+          "type": "semantic",
+          "score": 0.9999999403953552
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "05864_0000",
+    "scores": {
+      "captioning": 0.9290993551298625,
+      "vqa": [
+        {
+          "question": "What is the primary structure visible in the image?",
+          "type": "semantic",
+          "score": 0.9463236927986145
+        },
+        {
+          "question": "Are there more than one bridge present?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Is the top-most bridge oriented north-south or east-west?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Are the bridges identical?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06010_0000",
+    "scores": {
+      "captioning": 0.9320983630869915,
+      "vqa": [
+        {
+          "question": "What is the major structure in the image?",
+          "type": "semantic",
+          "score": 0.8550205230712891
+        },
+        {
+          "question": "Are there any vehicles in the top part of the image?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "How many unique structures are identified?",
+          "type": "numeric",
+          "score": 0.01831563888873418
+        },
+        {
+          "question": "Are there buildings with blue roofs in the service area?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Is there a vehicle in the top-middle position?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "What object occupies the largest area in the image?",
+          "type": "semantic",
+          "score": 0.8653883934020996
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06011_0000",
+    "scores": {
+      "captioning": 0.9287787888617899,
+      "vqa": [
+        {
+          "question": "What is the main structure visible in the image?",
+          "type": "semantic",
+          "score": 0.9091130495071411
+        },
+        {
+          "question": "How many harbors are visible?",
+          "type": "numeric",
+          "score": 0.1353352832366127
+        },
+        {
+          "question": "Are there any vehicles in the top-left quadrant of the image?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "How many ships are visible?",
+          "type": "numeric",
+          "score": 0.0
+        },
+        {
+          "question": "Are there any ships in the bottom-right area of the image?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "What color is the vehicle at the top-left corner closest to the top edge?",
+          "type": "semantic",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06012_0000",
+    "scores": {
+      "captioning": 0.9358387204317188,
+      "vqa": [
+        {
+          "question": "Is there a ship located at the bottom-right of the harbor?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "How many ships are visible in the image?",
+          "type": "numeric",
+          "score": 0.049787068367863944
+        },
+        {
+          "question": "Is the harbor structure complex or simple?",
+          "type": "semantic",
+          "score": 0.9243389368057251
+        },
+        {
+          "question": "Are there any ships positioned in the middle-left section of the harbor?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06013_0000",
+    "scores": {
+      "captioning": 0.9273421802193316,
+      "vqa": [
+        {
+          "question": "What is the main content depicted in the image?",
+          "type": "semantic",
+          "score": 0.9203461408615112
+        },
+        {
+          "question": "How many ground track fields are visible in the image?",
+          "type": "numeric",
+          "score": 0.0
+        },
+        {
+          "question": "Is the largest ground track field located on the right or left side of the image?",
+          "type": "semantic",
+          "score": 0.9999998807907104
+        },
+        {
+          "question": "Does the central ground track field appear to be surrounded by buildings?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "Which ground track field has the smallest size?",
+          "type": "semantic",
+          "score": 0.819445013999939
+        },
+        {
+          "question": "Are there any visible green spaces around the ground track fields?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06014_0000",
+    "scores": {
+      "captioning": 0.9277390147589517,
+      "vqa": [
+        {
+          "question": "What type of sports facility is visible in the image?",
+          "type": "semantic",
+          "score": 0.9680222868919373
+        },
+        {
+          "question": "What is the predominate color of the area surrounding the basketball court?",
+          "type": "semantic",
+          "score": 0.9450232982635498
+        },
+        {
+          "question": "Are trees present near the basketball court?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06015_0000",
+    "scores": {
+      "captioning": 0.9409567121393679,
+      "vqa": [
+        {
+          "question": "Which platform is the image taken from?",
+          "type": "semantic",
+          "score": 0.8238001465797424
+        },
+        {
+          "question": "What structure is visible in the image?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Is there water present in the image?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06016_0000",
+    "scores": {
+      "captioning": 0.9204413577943914,
+      "vqa": [
+        {
+          "question": "Is there an expressway toll station present in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Where is the expressway toll station located in the image?",
+          "type": "semantic",
+          "score": 0.6165985465049744
+        },
+        {
+          "question": "Are there visible buildings surrounding the expressway toll station?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "How would you describe the size of the expressway toll station?",
+          "type": "semantic",
+          "score": 0.9010844826698303
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06017_0000",
+    "scores": {
+      "captioning": 0.9295157094828136,
+      "vqa": [
+        {
+          "question": "What is the main structure in the bottom half of the image?",
+          "type": "semantic",
+          "score": 0.8981297016143799
+        },
+        {
+          "question": "Is there an overpass in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "How many train stations are visible in the image?",
+          "type": "numeric",
+          "score": 0.36787944117144233
+        },
+        {
+          "question": "In which part of the image is the overpass located?",
+          "type": "semantic",
+          "score": 0.8787602186203003
+        },
+        {
+          "question": "Does the image show any roads running east-west or north-south?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06018_0000",
+    "scores": {
+      "captioning": 0.9206567901139378,
+      "vqa": [
+        {
+          "question": "What type of sports field is visible in the image?",
+          "type": "semantic",
+          "score": 0.7908791303634644
+        },
+        {
+          "question": "What color is the infield of the baseball field?",
+          "type": "semantic",
+          "score": 0.9378526210784912
+        },
+        {
+          "question": "What color is the outfield of the baseball field?",
+          "type": "semantic",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06019_0000",
+    "scores": {
+      "captioning": 0.9252541253570491,
+      "vqa": [
+        {
+          "question": "What is the prominent structure on the eastern side of the image?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Is the area urban or rural?",
+          "type": "semantic",
+          "score": 0.8999642133712769
+        },
+        {
+          "question": "Does the train station have a roof over the platforms?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Are the buildings in the area densely packed?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06020_0000",
+    "scores": {
+      "captioning": 0.9275264787914609,
+      "vqa": [
+        {
+          "question": "What is the main structure visible in the image?",
+          "type": "semantic",
+          "score": 0.6986175775527954
+        },
+        {
+          "question": "Are there more than one track field visible in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What is the object positioned on the right side near the top of the image?",
+          "type": "semantic",
+          "score": 0.7239530086517334
+        },
+        {
+          "question": "Is the bridge located above or below the center of the image?",
+          "type": "semantic",
+          "score": 0.9861148595809937
+        },
+        {
+          "question": "How many bridges are visible in the image?",
+          "type": "numeric",
+          "score": 0.36787944117144233
+        },
+        {
+          "question": "Does the bridge span across a body of water?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06021_0000",
+    "scores": {
+      "captioning": 0.9182261805845963,
+      "vqa": [
+        {
+          "question": "What is the main feature visible in this aerial image?",
+          "type": "semantic",
+          "score": 0.9654965400695801
+        },
+        {
+          "question": "How many tennis courts are visible in the image?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "What color are the tennis courts' playing surfaces?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Are the tennis courts arranged vertically or horizontally?",
+          "type": "semantic",
+          "score": 0.8105258345603943
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06022_0000",
+    "scores": {
+      "captioning": 0.9265300978971421,
+      "vqa": [
+        {
+          "question": "Is there a golf field in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "How many ground track fields are visible?",
+          "type": "numeric",
+          "score": 0.36787944117144233
+        },
+        {
+          "question": "What is the color of the track in the ground track field?",
+          "type": "semantic",
+          "score": 0.895278811454773
+        },
+        {
+          "question": "Does the landscape appear to be urban or rural?",
+          "type": "semantic",
+          "score": 0.8721087574958801
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06023_0000",
+    "scores": {
+      "captioning": 0.9241970173349615,
+      "vqa": [
+        {
+          "question": "How many ships are visible in the image?",
+          "type": "numeric",
+          "score": 0.1353352832366127
+        },
+        {
+          "question": "Is the larger ship docked or in open water?",
+          "type": "semantic",
+          "score": 0.8460253477096558
+        },
+        {
+          "question": "Where is the smaller ship located in relation to the image frame?",
+          "type": "semantic",
+          "score": 0.896746814250946
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06024_0000",
+    "scores": {
+      "captioning": 0.9059554389917788,
+      "vqa": [
+        {
+          "question": "Is there an airplane in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Is the airplane under a structure?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06026_0000",
+    "scores": {
+      "captioning": 0.9330701912028311,
+      "vqa": [
+        {
+          "question": "What prominent structure is visible in the lower right portion of the image?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Is there a stadium in this aerial photograph?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "What pattern do the residential areas in the image display?",
+          "type": "semantic",
+          "score": 0.8727400898933411
+        },
+        {
+          "question": "Is the image taken in an urban or rural setting?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "What is the shape of the stadium?",
+          "type": "semantic",
+          "score": 0.9307289719581604
+        },
+        {
+          "question": "Does the image include a road network?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06027_0000",
+    "scores": {
+      "captioning": 0.9334408272834822,
+      "vqa": [
+        {
+          "question": "What is the color of the vehicle at the top?",
+          "type": "semantic",
+          "score": 0.6964637041091919
+        },
+        {
+          "question": "Which direction does the road run?",
+          "type": "semantic",
+          "score": 0.7555598020553589
+        },
+        {
+          "question": "How many vehicles can be seen on this section of the road?",
+          "type": "numeric",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06029_0000",
+    "scores": {
+      "captioning": 0.9419660939577679,
+      "vqa": [
+        {
+          "question": "What type of area is predominantly pictured in the image?",
+          "type": "semantic",
+          "score": 0.9216964840888977
+        },
+        {
+          "question": "How many vehicles are visible?",
+          "type": "numeric",
+          "score": 0.36787944117144233
+        },
+        {
+          "question": "Are there any structures partially visible?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What color is the majority of the space where the vehicles are parked?",
+          "type": "semantic",
+          "score": 0.9652007222175598
+        },
+        {
+          "question": "Is there vegetation visible in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Is the vehicle on the left or right larger?",
+          "type": "semantic",
+          "score": 0.8669833540916443
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06030_0000",
+    "scores": {
+      "captioning": 0.9315401920723608,
+      "vqa": [
+        {
+          "question": "Which color is the rooftop of the building in the expressway service area?",
+          "type": "semantic",
+          "score": 0.7371248006820679
+        },
+        {
+          "question": "What is located at the top-right corner of the image?",
+          "type": "semantic",
+          "score": 0.7183281183242798
+        },
+        {
+          "question": "How many vehicles are visible in the image?",
+          "type": "numeric",
+          "score": 0.0
+        },
+        {
+          "question": "Is there greenery surrounding the expressway service area?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06032_0000",
+    "scores": {
+      "captioning": 0.9332260027344655,
+      "vqa": [
+        {
+          "question": "What is the type of landscape surrounding the airport?",
+          "type": "semantic",
+          "score": 0.7816911935806274
+        },
+        {
+          "question": "Is the airport situated near a river?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What features identify this as an airport?",
+          "type": "semantic",
+          "score": 0.7125311493873596
+        },
+        {
+          "question": "How many rivers can be observed in the image?",
+          "type": "numeric",
+          "score": 0.0
+        },
+        {
+          "question": "Are there any houses visible in the image?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06033_0000",
+    "scores": {
+      "captioning": 0.9232414939490191,
+      "vqa": [
+        {
+          "question": "What type of sports court is visible in the image?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Which side of the image is the basketball court located?",
+          "type": "semantic",
+          "score": 0.862376868724823
+        },
+        {
+          "question": "Is there any greenery visible in the image?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06034_0000",
+    "scores": {
+      "captioning": 0.9232953080165845,
+      "vqa": [
+        {
+          "question": "What type of sports facility is visible in the image?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Is the baseball field surrounded by grass?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What is the shape of the area within the baseball field that denotes the playing space?",
+          "type": "semantic",
+          "score": 0.7872742414474487
+        },
+        {
+          "question": "Are there structures adjacent to the baseball field?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06035_0000",
+    "scores": {
+      "captioning": 0.9318757376428731,
+      "vqa": [
+        {
+          "question": "What is the main body of water in the image?",
+          "type": "semantic",
+          "score": 0.9115810394287109
+        },
+        {
+          "question": "Are there any ships docked in this image?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "How many ships are visible along the pier?",
+          "type": "numeric",
+          "score": 0.0
+        },
+        {
+          "question": "What natural feature is seen at the top of the image?",
+          "type": "semantic",
+          "score": 0.8630121946334839
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06037_0000",
+    "scores": {
+      "captioning": 0.9253620207512024,
+      "vqa": [
+        {
+          "question": "What is the main structure visible in the image?",
+          "type": "semantic",
+          "score": 0.7847533822059631
+        },
+        {
+          "question": "Are there any trees visible in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "How many overpasses are there in the image?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "Is the overpass identified by obj_id 0 positioned under the other overpass?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "Does the overpass with obj_id 1 go over the one with obj_id 0?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06038_0000",
+    "scores": {
+      "captioning": 0.9218070720120435,
+      "vqa": [
+        {
+          "question": "What is the large play area with white lines?",
+          "type": "semantic",
+          "score": 0.781131386756897
+        },
+        {
+          "question": "Are there any visible water bodies in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "How many tennis courts can be observed?",
+          "type": "numeric",
+          "score": 0.0
+        },
+        {
+          "question": "What is the surface surrounding the tennis court?",
+          "type": "semantic",
+          "score": 0.6806257963180542
+        },
+        {
+          "question": "Is the tennis court adjacent to a grassy area?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06039_0000",
+    "scores": {
+      "captioning": 0.9322703672322349,
+      "vqa": [
+        {
+          "question": "What is the shape of the cul-de-sac?",
+          "type": "semantic",
+          "score": 0.6477527618408203
+        },
+        {
+          "question": "How many vehicles are visible in the image?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "What color is the rooftop of the house with a vehicle in the driveway?",
+          "type": "semantic",
+          "score": 0.975993275642395
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06040_0000",
+    "scores": {
+      "captioning": 0.9129036571168005,
+      "vqa": [
+        {
+          "question": "What is the main type of structure in the image?",
+          "type": "semantic",
+          "score": 0.9765884876251221
+        },
+        {
+          "question": "How many bridges are visible in the image?",
+          "type": "numeric",
+          "score": 0.1353352832366127
+        },
+        {
+          "question": "Is the center bridge fully visible?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "Which bridge is the largest?",
+          "type": "semantic",
+          "score": 0.8829535841941833
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06043_0000",
+    "scores": {
+      "captioning": 0.931109925176466,
+      "vqa": [
+        {
+          "question": "What sport facilities are visible in this image?",
+          "type": "semantic",
+          "score": 0.8247498273849487
+        },
+        {
+          "question": "What shape is the infield of the baseball field?",
+          "type": "semantic",
+          "score": 0.9999998807907104
+        },
+        {
+          "question": "Is the track surrounding the field red?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "Are there any visible seating stands?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "How many sport facilities are uniquely identified in the image?",
+          "type": "numeric",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06044_0000",
+    "scores": {
+      "captioning": 0.9351374558998801,
+      "vqa": [
+        {
+          "question": "What is the main category of this sports complex?",
+          "type": "semantic",
+          "score": 0.7586464881896973
+        },
+        {
+          "question": "How many tennis courts are there?",
+          "type": "numeric",
+          "score": 0.0
+        },
+        {
+          "question": "Is the ground track field enclosed within any structure?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06045_0000",
+    "scores": {
+      "captioning": 0.9448433193515059,
+      "vqa": [
+        {
+          "question": "Is there an overpass in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What color dominates the image?",
+          "type": "semantic",
+          "score": 0.9060303568840027
+        },
+        {
+          "question": "How many buildings are visible?",
+          "type": "numeric",
+          "score": 0.0
+        },
+        {
+          "question": "Is the surrounding area urban or rural?",
+          "type": "semantic",
+          "score": 0.846849262714386
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06046_0000",
+    "scores": {
+      "captioning": 0.9304198121363272,
+      "vqa": [
+        {
+          "question": "What type of vehicle is visible in the image?",
+          "type": "semantic",
+          "score": 0.8183749914169312
+        },
+        {
+          "question": "Where is the airplane positioned in the image?",
+          "type": "semantic",
+          "score": 0.8633725643157959
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06047_0000",
+    "scores": {
+      "captioning": 0.928034811994287,
+      "vqa": [
+        {
+          "question": "What type of terrain is visible in the image?",
+          "type": "semantic",
+          "score": 0.9873374700546265
+        },
+        {
+          "question": "Is there a golf course in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What object is unique in this image?",
+          "type": "semantic",
+          "score": 0.8168196678161621
+        },
+        {
+          "question": "What color is the golf course compared to its surroundings?",
+          "type": "semantic",
+          "score": 0.9774007797241211
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06048_0000",
+    "scores": {
+      "captioning": 0.9181828081583315,
+      "vqa": [
+        {
+          "question": "What prominent urban feature is located at the bottom-middle of the image?",
+          "type": "semantic",
+          "score": 0.8241968154907227
+        },
+        {
+          "question": "Is there an isolated storage tank visible in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What natural element is visible throughout the image?",
+          "type": "semantic",
+          "score": 0.8577021956443787
+        },
+        {
+          "question": "Are there multiple overpasses evident in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "How many storage tanks are clearly identifiable?",
+          "type": "numeric",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06050_0000",
+    "scores": {
+      "captioning": 0.9328661500740816,
+      "vqa": [
+        {
+          "question": "What is the shape of the stadium?",
+          "type": "semantic",
+          "score": 0.9999998211860657
+        },
+        {
+          "question": "What color is the central area of the track and field?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Does the stadium appear to have multiple levels of seating?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "How many ground track and fields are visible in the image?",
+          "type": "numeric",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06051_0000",
+    "scores": {
+      "captioning": 0.9194043892377128,
+      "vqa": [
+        {
+          "question": "What type of sports fields are visible in the image?",
+          "type": "semantic",
+          "score": 0.8467031121253967
+        },
+        {
+          "question": "How many baseball fields are there in the image?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "What color is the infield of the baseball fields?",
+          "type": "semantic",
+          "score": 0.9378526210784912
+        },
+        {
+          "question": "Which baseball field is the largest?",
+          "type": "semantic",
+          "score": 0.8223360180854797
+        },
+        {
+          "question": "Is there a baseball field oriented at the bottom of the image?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06052_0000",
+    "scores": {
+      "captioning": 0.9390672378753567,
+      "vqa": [
+        {
+          "question": "Which type of vessel is visible on the right side of the image?",
+          "type": "semantic",
+          "score": 0.7592595815658569
+        },
+        {
+          "question": "Is there more than one ship in the image?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "What is the main element surrounding the ship?",
+          "type": "semantic",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06053_0000",
+    "scores": {
+      "captioning": 0.9377665618698116,
+      "vqa": [
+        {
+          "question": "What type of main structure is visible in the image?",
+          "type": "semantic",
+          "score": 0.9700039029121399
+        },
+        {
+          "question": "Is the area surrounding the train station urban?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What feature is visible on the top right of the image?",
+          "type": "semantic",
+          "score": 0.94825679063797
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06054_0000",
+    "scores": {
+      "captioning": 0.9429270735031681,
+      "vqa": [
+        {
+          "question": "How many tennis courts are visible in the image?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "Are there any vehicles parked on the left side of the parking lot?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "What is the main color of the building roofs?",
+          "type": "semantic",
+          "score": 0.9516159892082214
+        },
+        {
+          "question": "Is there a vehicle positioned in the middle-left area of the image?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "Which tennis court is larger in size?",
+          "type": "semantic",
+          "score": 0.944214940071106
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06055_0000",
+    "scores": {
+      "captioning": 0.9298965482889778,
+      "vqa": [
+        {
+          "question": "What type of sports fields are depicted in the image?",
+          "type": "semantic",
+          "score": 0.8467031121253967
+        },
+        {
+          "question": "How many baseball fields are visible in the image?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "What color are the areas surrounding the baseball fields?",
+          "type": "semantic",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06057_0000",
+    "scores": {
+      "captioning": 0.9331623027492669,
+      "vqa": [
+        {
+          "question": "What is the main feature in this image?",
+          "type": "semantic",
+          "score": 0.6970577239990234
+        },
+        {
+          "question": "What color are the playing surfaces of the tennis courts?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "How many tennis courts are there in the image?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "Is there a visible strip separating the tennis courts?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06058_0000",
+    "scores": {
+      "captioning": 0.9329303719473928,
+      "vqa": [
+        {
+          "question": "Is there a vehicle in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "How many vehicles are visible?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "Where is the vehicle located?",
+          "type": "semantic",
+          "score": 0.6444573402404785
+        },
+        {
+          "question": "Is there an expressway service area present?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "What dominates the image, the vehicle or the expressway service area?",
+          "type": "semantic",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06059_0000",
+    "scores": {
+      "captioning": 0.9349196117250602,
+      "vqa": [
+        {
+          "question": "What is the main feature in the lower half of the image?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Is a playground visible in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Is the baseball field unique in this image?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06060_0000",
+    "scores": {
+      "captioning": 0.9298549101177557,
+      "vqa": [
+        {
+          "question": "Is the visible ship under clear skies or an overcast sky?",
+          "type": "semantic",
+          "score": 0.8315988779067993
+        },
+        {
+          "question": "What is the object category of the visible entity in the image?",
+          "type": "semantic",
+          "score": 0.9999999403953552
+        },
+        {
+          "question": "Can other objects or landmarks be clearly identified in the image apart from the ship?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06063_0000",
+    "scores": {
+      "captioning": 0.9361876435619537,
+      "vqa": [
+        {
+          "question": "What type of sport facility is visible in the image?",
+          "type": "semantic",
+          "score": 0.9680222868919373
+        },
+        {
+          "question": "Is the sport facility surrounded by a sandy area?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "What is the predominant color of the surface where the court markings are drawn?",
+          "type": "semantic",
+          "score": 0.8897703886032104
+        },
+        {
+          "question": "What color are the court markings?",
+          "type": "semantic",
+          "score": 0.9465958476066589
+        },
+        {
+          "question": "Are there trees adjacent to the basketball court?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Does the image include any buildings?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06064_0000",
+    "scores": {
+      "captioning": 0.9393368111809364,
+      "vqa": [
+        {
+          "question": "What is the main large object in the image?",
+          "type": "semantic",
+          "score": 0.9999999403953552
+        },
+        {
+          "question": "How many ships are visible?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "Is there a vehicle present near the ship?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "Where is the vehicle located relative to the ship?",
+          "type": "semantic",
+          "score": 0.7873570322990417
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06066_0000",
+    "scores": {
+      "captioning": 0.935478042304342,
+      "vqa": [
+        {
+          "question": "What is the shape of the baseball field?",
+          "type": "semantic",
+          "score": 0.9331206679344177
+        },
+        {
+          "question": "What kind of field is shown adjacent to the track?",
+          "type": "semantic",
+          "score": 0.7908791303634644
+        },
+        {
+          "question": "What is the color of the infield of the baseball field?",
+          "type": "semantic",
+          "score": 0.9378526210784912
+        },
+        {
+          "question": "Is the baseball field surrounded by a track?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Are there visible roads near the baseball field?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06068_0000",
+    "scores": {
+      "captioning": 0.9236749530863266,
+      "vqa": [
+        {
+          "question": "What prominent man-made object is visible in the image?",
+          "type": "semantic",
+          "score": 0.848904013633728
+        },
+        {
+          "question": "Where is the storage tank located in the image?",
+          "type": "semantic",
+          "score": 0.9347736835479736
+        },
+        {
+          "question": "What type of terrain is visible in the image?",
+          "type": "semantic",
+          "score": 0.5876644849777222
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06069_0000",
+    "scores": {
+      "captioning": 0.9185953515412472,
+      "vqa": [
+        {
+          "question": "What category does the unique object in the image belong to?",
+          "type": "semantic",
+          "score": 0.870695173740387
+        },
+        {
+          "question": "Is the visible golf course surrounded by forested areas?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What type of terrain dominates the top half of the image?",
+          "type": "semantic",
+          "score": 0.34180599451065063
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06070_0000",
+    "scores": {
+      "captioning": 0.933846916231718,
+      "vqa": [
+        {
+          "question": "What is the main man-made structure visible in the image?",
+          "type": "semantic",
+          "score": 0.9999998807907104
+        },
+        {
+          "question": "Does the image appear to be taken from a satellite or aerial perspective?",
+          "type": "semantic",
+          "score": 0.9320508241653442
+        },
+        {
+          "question": "What color are the areas surrounding the overpass?",
+          "type": "semantic",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06071_0000",
+    "scores": {
+      "captioning": 0.9310764761418686,
+      "vqa": [
+        {
+          "question": "What is the shape of the stadium seen in the image?",
+          "type": "semantic",
+          "score": 0.8622852563858032
+        },
+        {
+          "question": "Is the track field located outside or inside the stadium?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "What color is the ground track and field?",
+          "type": "semantic",
+          "score": 0.9450232982635498
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06074_0000",
+    "scores": {
+      "captioning": 0.9296847306788585,
+      "vqa": [
+        {
+          "question": "What is the main feature in the image?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "What color is the tennis court's playing surface?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Is there a green area near the tennis court?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06075_0000",
+    "scores": {
+      "captioning": 0.9281028968109034,
+      "vqa": [
+        {
+          "question": "What sports facilities are depicted in this image?",
+          "type": "semantic",
+          "score": 0.9164276123046875
+        },
+        {
+          "question": "Which side of the image is the baseball field on?",
+          "type": "semantic",
+          "score": 0.7115371823310852
+        },
+        {
+          "question": "Does the ground track and field area have a sandpit?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "What shape does the baseball field resemble?",
+          "type": "semantic",
+          "score": 0.9134639501571655
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06076_0000",
+    "scores": {
+      "captioning": 0.9114907748878789,
+      "vqa": [
+        {
+          "question": "What is the total number of tennis courts visible in the image?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "Is the third tennis court fully visible?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "How many tennis courts are completely shown in the image?",
+          "type": "numeric",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06077_0000",
+    "scores": {
+      "captioning": 0.9278758891383456,
+      "vqa": [
+        {
+          "question": "How many ships are clearly visible in the image?",
+          "type": "numeric",
+          "score": 0.36787944117144233
+        },
+        {
+          "question": "What is the most prominent object in the image?",
+          "type": "semantic",
+          "score": 0.9999999403953552
+        },
+        {
+          "question": "Is the larger ship positioned towards the top or bottom of the image?",
+          "type": "semantic",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06079_0000",
+    "scores": {
+      "captioning": 0.9297017315814148,
+      "vqa": [
+        {
+          "question": "What type of transportation is the main focus in the port area?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "What is the main feature in the port area?",
+          "type": "semantic",
+          "score": 0.9999999403953552
+        },
+        {
+          "question": "Are there any helicopter pads visible in the image?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "Does the image show mostly water or land?",
+          "type": "semantic",
+          "score": 0.7224165797233582
+        },
+        {
+          "question": "Is the ship occupying the majority of the image frame?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06080_0000",
+    "scores": {
+      "captioning": 0.9333582232337205,
+      "vqa": [
+        {
+          "question": "What type of area is shown in the image?",
+          "type": "semantic",
+          "score": 0.876143217086792
+        },
+        {
+          "question": "What is the position of the golf field within the image?",
+          "type": "semantic",
+          "score": 0.7363944053649902
+        },
+        {
+          "question": "Is there a river visible in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Are there any large buildings close to the ground track and field?",
+          "type": "binary",
+          "score": 0.0
+        },
+        {
+          "question": "Does the golf field have sand bunkers?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06081_0000",
+    "scores": {
+      "captioning": 0.9183741412013022,
+      "vqa": [
+        {
+          "question": "How many airplanes are visible in the image?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "Is there a vehicle present in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What object is at the bottom center of the image?",
+          "type": "semantic",
+          "score": 0.9619182348251343
+        },
+        {
+          "question": "Are boarding ramps visible near the airplane?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What type of area is depicted in the image?",
+          "type": "semantic",
+          "score": 0.9271926879882812
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06082_0000",
+    "scores": {
+      "captioning": 0.9343548581808653,
+      "vqa": [
+        {
+          "question": "What is the main feature running horizontally in the image?",
+          "type": "semantic",
+          "score": 0.8681033849716187
+        },
+        {
+          "question": "What is located above the bridge?",
+          "type": "semantic",
+          "score": 0.8886778354644775
+        },
+        {
+          "question": "How many vehicles are visible on the bridge?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "Are there trees visible in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Is the image in color?",
+          "type": "binary",
+          "score": 0.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06083_0000",
+    "scores": {
+      "captioning": 0.9342821995290144,
+      "vqa": [
+        {
+          "question": "What type of court is visible in the image?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Is there a vehicle present in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Are there any water features visible in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Does the property have a tennis court?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "How many tennis courts are visible?",
+          "type": "numeric",
+          "score": 1.0
+        },
+        {
+          "question": "What surrounds the property?",
+          "type": "semantic",
+          "score": 0.9230656623840332
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06084_0000",
+    "scores": {
+      "captioning": 0.9290280633101791,
+      "vqa": [
+        {
+          "question": "How many ships are visible in the image?",
+          "type": "numeric",
+          "score": 0.36787944117144233
+        },
+        {
+          "question": "Where is the ship with the top-most position located?",
+          "type": "semantic",
+          "score": 0.6858388185501099
+        },
+        {
+          "question": "What object is found in the bottom-right of the image?",
+          "type": "semantic",
+          "score": 0.9744580984115601
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06086_0000",
+    "scores": {
+      "captioning": 0.9323745362108312,
+      "vqa": [
+        {
+          "question": "What is the main color of the basketball court surface?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Is there a basketball court visible in the image?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Which side of the image is the basketball court located?",
+          "type": "semantic",
+          "score": 0.9999998807907104
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06088_0000",
+    "scores": {
+      "captioning": 0.9227432549828717,
+      "vqa": [
+        {
+          "question": "What is the primary type of landscape?",
+          "type": "semantic",
+          "score": 0.9999999403953552
+        },
+        {
+          "question": "What object connects two land areas?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "What color are the agricultural fields?",
+          "type": "semantic",
+          "score": 0.9017152786254883
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06089_0000",
+    "scores": {
+      "captioning": 0.9316529873864575,
+      "vqa": [
+        {
+          "question": "What is the main object in the image?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Does the bridge connect two land areas?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Is the bridge composed of multiple segments?",
+          "type": "binary",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  {
+    "image_id": "06090_0000",
+    "scores": {
+      "captioning": 0.9238715257016821,
+      "vqa": [
+        {
+          "question": "What main structure is visible in the image?",
+          "type": "semantic",
+          "score": 1.0
+        },
+        {
+          "question": "Does the image feature any water bodies?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Are there any roads visible in the vicinity of the dam?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "Is the dam surrounded by vegetation?",
+          "type": "binary",
+          "score": 1.0
+        },
+        {
+          "question": "What color is the predominant vegetation in the image?",
+          "type": "semantic",
+          "score": 1.0
+        }
+      ]
+    }
+  }
+]
