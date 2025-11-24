@@ -1,11 +1,14 @@
 transformers
 torch
 numpy
-python-dotenv
-wandb
-shapely
 datasets
 pillow
 torchvision
 jupyter 
 ipywidgets
+flash-attn==2.7.4.post1
+tensorboardX
+peft
+bitsandbytes
+qwen-vl-utils
+trl==0.8.0
