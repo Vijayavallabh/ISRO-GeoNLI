@@ -1,12 +1,14 @@
-transformers
-torch==2.9.0
+unsloth
+transformers==4.57.0
+trl<0.9.0
+xformers
+torch==2.3.0
 numpy
 python-dotenv
 wandb
 shapely
-datasets
+datasets<4.0.0
 pillow
-torchvision
 jupyter 
 ipywidgets
 tiktoken
@@ -14,3 +16,4 @@ peft
 accelerate
 bitsandbytes
 tensorboardX
+evaluate

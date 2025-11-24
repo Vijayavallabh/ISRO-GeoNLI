@@ -46,7 +46,7 @@ Navigate to VRSBench folder and then in Annotations_train folder, go to P0212_00
 
 1. Create a virtual environment using `uv`:
    ```bash
-   uv venv
+   uv venv --python 3.11.9
    ```
    This creates a `.venv` directory in the project root.
 
