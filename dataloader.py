@@ -60,16 +60,6 @@ class VRSStreamingSplit(Iterable[VRSSample]):
                     yield _parse_example(example, self.image_root)
 
 
-def build_vrs_dataloaders() -> Dict[str, VRSStreamingSplit]:
-    train_ds = load_dataset("VRSBench", split="train", streaming=True)
-    test_ds = load_dataset("VRSBench", split="validation", streaming=True)
-    
-    return {
-        "train": VRSStreamingSplit(train_ds, "VRSBench/Images_train", split_type="train"),
-        "val": VRSStreamingSplit(train_ds, "VRSBench/Images_train", split_type="val"),
-        "test": VRSStreamingSplit(test_ds, "VRSBench/Images_val", split_type="all"),
-    }
-
 def build_vrs_dataloaders_train_test_only() -> Dict[str, VRSStreamingSplit]:
     """
     Function that provides only train and test splits without any validation split.
@@ -79,5 +69,14 @@ def build_vrs_dataloaders_train_test_only() -> Dict[str, VRSStreamingSplit]:
     
     return {
         "train": VRSStreamingSplit(train_ds, "VRSBench/Images_train", split_type="all"),
+        "test": VRSStreamingSplit(test_ds, "VRSBench/Images_val", split_type="all"),
+    }
+def build_vrs_dataloaders() -> Dict[str, VRSStreamingSplit]:
+    train_ds = load_dataset("VRSBench", split="train", streaming=True)
+    test_ds = load_dataset("VRSBench", split="validation", streaming=True)
+    
+    return {
+        "train": VRSStreamingSplit(train_ds, "VRSBench/Images_train", split_type="train"),
+        "val": VRSStreamingSplit(train_ds, "VRSBench/Images_train", split_type="val"),
         "test": VRSStreamingSplit(test_ds, "VRSBench/Images_val", split_type="all"),
     }

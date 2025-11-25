@@ -24,14 +24,6 @@ from transformers.activations import GELUTanh
 activations.PytorchGELUTanh = GELUTanh
 PytorchGELUTanh = GELUTanh
 
-from transformers.cache_utils import DynamicCache
-# PATCH: Fix for DynamicCache compatibility with Kimi-VL remote code
-if not hasattr(DynamicCache, "get_usable_length"):
-    print("Patching DynamicCache.get_usable_length for Kimi-VL compatibility...")
-    def get_usable_length(self, input_seq_length, layer_idx=0):
-        return self.get_seq_length(layer_idx)
-    DynamicCache.get_usable_length = get_usable_length
-
 from peft import (
     LoraConfig,
     get_peft_model,
@@ -40,7 +32,7 @@ from peft import (
 )
 from PIL import Image
 
-
+ 
 # ==================== Configuration ====================
 
 @dataclass
@@ -596,10 +588,6 @@ def load_model_and_processor(model_config: ModelConfig):
         quantization_config=quantization_config,
     )
 
-    # Disable caching for training (fixes DynamicCache error and saves memory)
-    model.config.use_cache = False
-    print("  ✓ Disabled model.config.use_cache for training")
-        
     if model_config.load_in_4bit or model_config.load_in_8bit:
         print("Preparing model for k-bit training...")
         model = prepare_model_for_kbit_training(
@@ -637,26 +625,7 @@ def load_model_and_processor(model_config: ModelConfig):
         model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
         print("  ✓ Manually enabled input gradients")
 
-    # PATCH: Fix for "view of a leaf Variable" error in Kimi-VL
-    # The model modifies inputs_embeds in-place, which fails when grads are enabled on inputs
-    # We wrap the embedding layer to return a clone, which is safe to modify in-place
-    try:
-        input_embeddings = model.get_input_embeddings()
-        if input_embeddings is not None:
-            _original_forward = input_embeddings.forward
-            
-            def _patched_forward(*args, **kwargs):
-                output = _original_forward(*args, **kwargs)
-                # Create a dummy scalar requiring grad to make output a non-leaf tensor
-                # This prevents the "view of a leaf Variable" error during in-place modification
-                dummy = torch.zeros(1, device=output.device, dtype=output.dtype, requires_grad=True)
-                return output + dummy
-            
-            input_embeddings.forward = _patched_forward
-            print("  ✓ Patched embedding layer to return clones (fixes in-place error)")
-    except Exception as e:
-        print(f"  ! Warning: Could not patch embedding layer: {e}")
-    
+       
     # Ensure model and tokenizer are in sync with special tokens
     tokenizer = processor.tokenizer if hasattr(processor, "tokenizer") else processor
     # Updated tokens: {'eos_token_id': 163585, 'bos_token_id': 163584, 'pad_token_id': 163838}
@@ -672,46 +641,6 @@ def load_model_and_processor(model_config: ModelConfig):
     print(f"\nModel loaded successfully!\n")
     
     return model, processor
-
-
-
-def fix_moe_gate_training(model):
-    """
-    Patch MoE gate to avoid assertion error during training
-    The Kimi-VL MoE gate has an assert not self.training check
-    """
-    print("Patching MoE gates to force eval mode and handle None aux_loss...")
-    count = 0
-    for name, module in model.named_modules():
-        if name.endswith(".gate") and "mlp" in name:
-            # Force to eval mode
-            module.eval()
-            # Disable future train() calls by replacing the method
-            module.train = lambda mode=True: module.eval()
-            
-            # Patch forward to handle None aux_loss
-            if not hasattr(module, "_patched_for_none_loss"):
-                # Capture the original bound forward method
-                original_forward = module.forward
-                
-                def make_patched_forward(orig_fwd):
-                    def patched_forward(*args, **kwargs):
-                        outputs = orig_fwd(*args, **kwargs)
-                        # Check if aux_loss (3rd element) is None
-                        if isinstance(outputs, tuple) and len(outputs) == 3 and outputs[2] is None:
-                            # Create dummy zero loss
-                            # Use the device/dtype from weights (2nd element)
-                            topk_idx, topk_weight, _ = outputs
-                            aux_loss = torch.tensor(0.0, device=topk_weight.device, dtype=topk_weight.dtype, requires_grad=True)
-                            return (topk_idx, topk_weight, aux_loss)
-                        return outputs
-                    return patched_forward
-                
-                module.forward = make_patched_forward(original_forward)
-                module._patched_for_none_loss = True
-            
-            count += 1
-    print(f"  ✓ Patched {count} MoE gates")
 
 
 def apply_lora(model, lora_config: LoRAConfig):
@@ -731,9 +660,6 @@ def apply_lora(model, lora_config: LoRAConfig):
     
     # Apply PEFT
     model = get_peft_model(model, peft_config)
-    
-    # Apply MoE gate fix
-    fix_moe_gate_training(model)
     
     # Print trainable parameters breakdown
     print("="*60)
