@@ -1,7 +1,6 @@
 """
-Modular LoRA Fine-tuning Script for Vision-Language Models
-Supports flexible model selection, component-specific LoRA application, and dataset switching
-Optimized for Kimi-VL architecture (MoonViT + DeepseekV3)
+Modular LoRA Fine-tuning Script for Qwen3-VL-8B-Instruct
+Optimized for Qwen3-VL architecture (ViT-based vision + Qwen3 text model)
 """
 from dataloader import build_vrs_dataloaders_train_test_only
 from dataclasses import dataclass, field
@@ -12,17 +11,12 @@ import torch
 from torch.utils.data import Dataset
 from datasets import load_dataset
 from transformers import (
-    AutoModelForCausalLM,
+    Qwen3VLForConditionalGeneration,
     AutoProcessor,
-    AutoTokenizer,
     TrainingArguments,
     Trainer,
     BitsAndBytesConfig
 )
-import transformers.activations as activations
-from transformers.activations import GELUTanh
-activations.PytorchGELUTanh = GELUTanh
-PytorchGELUTanh = GELUTanh
 
 from peft import (
     LoraConfig,
@@ -32,13 +26,12 @@ from peft import (
 )
 from PIL import Image
 
- 
 # ==================== Configuration ====================
 
 @dataclass
 class ModelConfig:
     """Configuration for the base VLM model"""
-    model_name: str = "moonshotai/Kimi-VL-A3B-Instruct"
+    model_name: str = "Qwen/Qwen3-VL-8B-Instruct"
     torch_dtype: str = "bfloat16"  # "float16", "bfloat16", "float32"
     device_map: str = "auto"
     load_in_8bit: bool = False
@@ -61,7 +54,7 @@ class ModelConfig:
 
 @dataclass
 class LoRAConfig:
-    """Configuration for LoRA fine-tuning with Kimi-VL specific architecture support"""
+    """Configuration for LoRA fine-tuning with Qwen3-VL specific architecture support"""
     r: int = 16  # LoRA rank
     lora_alpha: int = 32  # LoRA scaling factor
     lora_dropout: float = 0.05
@@ -71,15 +64,15 @@ class LoRAConfig:
     # Target modules configuration
     target_modules: Optional[List[str]] = None
     
-    # Preset options for Kimi-VL architecture
+    # Preset options for Qwen3-VL architecture
     target_preset: Literal[
         "language_attention",           # Only LLM attention layers
-        "language_mlp",                 # Only LLM MLP/MoE layers
+        "language_mlp",                 # Only LLM MLP layers
         "language_all",                 # All LLM components
         "vision_attention",             # Only vision encoder attention
         "vision_mlp",                   # Only vision encoder MLP
         "vision_all",                   # All vision encoder components
-        "projector",                    # Multi-modal projector only
+        "merger",                       # Multi-modal projector/merger only
         "attention_all",                # All attention layers (vision + language)
         "mlp_all",                      # All MLP layers (vision + language)
         "full_model",                   # Everything except embeddings/lm_head
@@ -88,13 +81,8 @@ class LoRAConfig:
     
     # Component selection for fine-grained control
     include_vision_encoder: bool = False
-    include_projector: bool = False
+    include_merger: bool = False
     include_language_model: bool = True
-    
-    # MoE-specific options (for DeepseekV3 layers 1-26)
-    apply_lora_to_moe_experts: bool = False  # Apply LoRA to MoE expert MLPs
-    apply_lora_to_moe_shared: bool = True    # Apply LoRA to shared experts
-    apply_lora_to_moe_gate: bool = False     # Apply LoRA to MoE gating
     
     # Custom module names (used when target_preset="custom")
     custom_modules: List[str] = field(default_factory=list)
@@ -104,15 +92,15 @@ class LoRAConfig:
     
     def get_target_modules(self, model) -> List[str]:
         """
-        Determine target modules based on Kimi-VL architecture
+        Determine target modules based on Qwen3-VL architecture
         
         Model structure:
-        - vision_tower.encoder.blocks[*].{wqkv, wo, mlp.fc0, mlp.fc1}
-        - multi_modal_projector.{linear_1, linear_2}
-        - language_model.model.layers[*].self_attn.{q_proj, kv_a_proj_with_mqa, kv_b_proj, o_proj}
-        - language_model.model.layers[0].mlp.{gate_proj, up_proj, down_proj}  # Dense layer
-        - language_model.model.layers[1-26].mlp.experts[*].{gate_proj, up_proj, down_proj}  # MoE
-        - language_model.model.layers[1-26].mlp.shared_experts.{gate_proj, up_proj, down_proj}
+        - model.visual.blocks[*].attn.{qkv, proj}
+        - model.visual.blocks[*].mlp.{linear_fc1, linear_fc2}
+        - model.visual.merger.{linear_fc1, linear_fc2}
+        - model.visual.deepstack_merger_list[*].{linear_fc1, linear_fc2}
+        - model.language_model.layers[*].self_attn.{q_proj, k_proj, v_proj, o_proj}
+        - model.language_model.layers[*].mlp.{gate_proj, up_proj, down_proj}
         """
         if self.target_modules is not None:
             return self.target_modules
@@ -120,21 +108,21 @@ class LoRAConfig:
         if self.target_preset == "custom":
             return self.custom_modules
         
-        # Define module groups for Kimi-VL
-        vision_attention = ["wqkv", "wo"]  # Vision encoder uses combined qkv
-        vision_mlp = ["fc0", "fc1"]
+        # Define module groups for Qwen3-VL
+        vision_attention = ["qkv", "proj"]  # Vision encoder attention
+        vision_mlp = ["linear_fc1", "linear_fc2"]  # Vision encoder MLP
         
-        projector_modules = ["linear_1", "linear_2"]
+        merger_modules = ["linear_fc1", "linear_fc2"]  # Projector/merger
         
-        # DeepseekV3 uses Multi-head Latent Attention (MLA)
+        # Qwen3 text model uses standard transformer attention
         language_attention = [
-            "q_proj",                # Query projection
-            "kv_a_proj_with_mqa",   # Key-Value latent compression
-            "kv_b_proj",            # Key-Value expansion
-            "o_proj"                # Output projection
+            "q_proj",    # Query projection
+            "k_proj",    # Key projection
+            "v_proj",    # Value projection
+            "o_proj"     # Output projection
         ]
         
-        language_mlp = ["gate_proj", "up_proj", "down_proj"]
+        language_mlp = ["gate_proj", "up_proj", "down_proj"]  # Standard MLP
         
         # Build target list based on preset
         targets = []
@@ -157,8 +145,8 @@ class LoRAConfig:
         elif self.target_preset == "vision_all":
             targets = vision_attention + vision_mlp
             
-        elif self.target_preset == "projector":
-            targets = projector_modules
+        elif self.target_preset == "merger":
+            targets = merger_modules
             
         elif self.target_preset == "attention_all":
             targets = vision_attention + language_attention
@@ -168,15 +156,15 @@ class LoRAConfig:
             
         elif self.target_preset == "full_model":
             targets = (vision_attention + vision_mlp + 
-                      projector_modules + 
+                      merger_modules + 
                       language_attention + language_mlp)
         
         # Apply component filters
         if not self.include_vision_encoder:
             targets = [t for t in targets if t not in vision_attention + vision_mlp]
         
-        if not self.include_projector:
-            targets = [t for t in targets if t not in projector_modules]
+        if not self.include_merger:
+            targets = [t for t in targets if t not in merger_modules]
             
         if not self.include_language_model:
             targets = [t for t in targets if t not in language_attention + language_mlp]
@@ -186,12 +174,12 @@ class LoRAConfig:
     def get_modules_to_save(self) -> Optional[List[str]]:
         """
         Specify additional modules to save during training
-        Useful for projector or embedding layers
+        Useful for merger or embedding layers
         """
         modules = []
         
-        if self.include_projector:
-            modules.extend(["multi_modal_projector"])
+        if self.include_merger:
+            modules.extend(["visual.merger", "visual.deepstack_merger_list"])
             
         return modules if modules else None
     
@@ -201,16 +189,13 @@ class LoRAConfig:
         modules_to_save = self.get_modules_to_save()
         
         print(f"\n{'='*60}")
-        print(f"LoRA Configuration:")
+        print(f"LoRA Configuration for Qwen3-VL:")
         print(f"  Rank: {self.r}, Alpha: {self.lora_alpha}, Dropout: {self.lora_dropout}")
         print(f"  Target preset: {self.target_preset}")
         print(f"  Target modules: {target_modules}")
         print(f"  Vision Encoder: {self.include_vision_encoder}")
-        print(f"  Projector: {self.include_projector}")
+        print(f"  Merger/Projector: {self.include_merger}")
         print(f"  Language Model: {self.include_language_model}")
-        if self.apply_lora_to_moe_experts or self.apply_lora_to_moe_shared:
-            print(f"  MoE Experts: {self.apply_lora_to_moe_experts}")
-            print(f"  MoE Shared: {self.apply_lora_to_moe_shared}")
         if modules_to_save:
             print(f"  Additional modules to save: {modules_to_save}")
         print(f"{'='*60}\n")
@@ -232,29 +217,29 @@ class LoRAConfig:
         Useful for debugging and finding target modules
         """
         print("\n" + "="*60)
-        print("Model Module Analysis")
+        print("Qwen3-VL Model Module Analysis")
         print("="*60 + "\n")
         
         vision_modules = set()
-        projector_modules = set()
+        merger_modules = set()
         language_modules = set()
         
         for name, module in model.named_modules():
             if isinstance(module, torch.nn.Linear):
                 module_name = name.split('.')[-1]
                 
-                if 'vision_tower' in name:
+                if 'visual' in name and 'merger' not in name:
                     vision_modules.add(module_name)
-                elif 'multi_modal_projector' in name:
-                    projector_modules.add(module_name)
+                elif 'merger' in name:
+                    merger_modules.add(module_name)
                 elif 'language_model' in name:
                     language_modules.add(module_name)
         
         print("Vision Encoder Linear Modules:")
         print(f"  {sorted(vision_modules)}\n")
         
-        print("Projector Linear Modules:")
-        print(f"  {sorted(projector_modules)}\n")
+        print("Merger/Projector Linear Modules:")
+        print(f"  {sorted(merger_modules)}\n")
         
         print("Language Model Linear Modules:")
         print(f"  {sorted(language_modules)}\n")
@@ -262,16 +247,16 @@ class LoRAConfig:
         # Count parameters
         total_params = sum(p.numel() for p in model.parameters())
         vision_params = sum(p.numel() for n, p in model.named_parameters() 
-                           if 'vision_tower' in n)
-        projector_params = sum(p.numel() for n, p in model.named_parameters() 
-                              if 'multi_modal_projector' in n)
+                           if 'visual' in n and 'merger' not in n)
+        merger_params = sum(p.numel() for n, p in model.named_parameters() 
+                           if 'merger' in n)
         language_params = sum(p.numel() for n, p in model.named_parameters() 
                              if 'language_model' in n)
         
         print("Parameter Distribution:")
         print(f"  Total: {total_params:,} ({total_params/1e9:.2f}B)")
         print(f"  Vision: {vision_params:,} ({vision_params/total_params*100:.1f}%)")
-        print(f"  Projector: {projector_params:,} ({projector_params/total_params*100:.1f}%)")
+        print(f"  Merger: {merger_params:,} ({merger_params/total_params*100:.1f}%)")
         print(f"  Language: {language_params:,} ({language_params/total_params*100:.1f}%)")
         print("="*60 + "\n")
 
@@ -282,7 +267,6 @@ class DatasetConfig:
     dataset_name: str = "VRSBench"
     task: Literal["vqa", "caption", "both"] = "both"
     streaming: bool = False
-    max_samples: Optional[int] = None
     image_column: str = "image"
     
     # Task-specific column names
@@ -296,7 +280,6 @@ class DatasetConfig:
     
     # Processing
     max_length: int = 2048
-    image_size: Optional[int] = None  # None means use processor default
 
 
 @dataclass
@@ -348,34 +331,49 @@ class TrainingConfig:
             metric_for_best_model="eval_loss",
         )
 
+
 @dataclass
 class VLMDataCollator:
     """
-    Custom data collator for VLMs that handles flattening of pixel_values
-    and other image-related tensors that shouldn't be stacked normally.
+    Custom data collator for Qwen3-VL that handles flattening of pixel_values
+    and other image-related tensors.
     """
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
         batch = {}
         first = features[0]
         
-        # Keys that should be concatenated (flattened batch) instead of stacked
-        # pixel_values: [N, C, H, W] -> [B*N, C, H, W]
-        # grid_hws: [N, 2] -> [B*N, 2] (Kimi-VL specific)
-        concat_keys = ["pixel_values", "grid_hws", "image_grid_thw", "pixel_attention_mask"]
+        # Debug: Print first feature shapes
+        # print(f"First feature shapes: {[(k, v.shape if isinstance(v, torch.Tensor) else type(v)) for k, v in first.items()]}")
+        
+        # Keys that need special handling for Qwen3-VL
+        pixel_keys = ["pixel_values"]
+        grid_keys = ["image_grid_thw"]
         
         for k, v in first.items():
-            if k in concat_keys:
-                # Concatenate along batch dimension (flattening the batch of lists/tensors)
+            if k in pixel_keys:
+                # Concatenate pixel values along first dimension (flatten all image patches)
+                # Each feature[k] has shape [num_patches_per_image, C, H, W]
+                # Result: [total_patches_in_batch, C, H, W]
                 batch[k] = torch.cat([f[k] for f in features], dim=0)
+                
+            elif k in grid_keys:
+                # Concatenate grid dimensions (each sample has [num_images_in_sample, 3])
+                # Result: [total_images_in_batch, 3]
+                batch[k] = torch.cat([f[k] for f in features], dim=0)
+                
             else:
                 # Default stacking for text and other tensors
                 try:
                     batch[k] = torch.stack([f[k] for f in features])
-                except Exception:
-                    # Fallback for non-tensor data
+                except Exception as e:
+                    # Fallback for non-tensor data or incompatible shapes
                     batch[k] = [f[k] for f in features]
-                    
+        
+        # Debug: Print batch shapes
+        # print(f"Batch shapes: {[(k, v.shape if isinstance(v, torch.Tensor) else type(v)) for k, v in batch.items()]}")
+        
         return batch
+
 # ==================== Dataset Implementation ====================
 
 class StreamingVLMDataset(Dataset):
@@ -409,9 +407,6 @@ class StreamingVLMDataset(Dataset):
                         "task": "vqa"
                     })
         
-        # Apply max_samples limit if specified
-        if self.config.max_samples and len(self.flattened) > self.config.max_samples:
-            self.flattened = self.flattened[:self.config.max_samples]
     
     def __len__(self) -> int:
         return len(self.flattened)
@@ -420,16 +415,16 @@ class StreamingVLMDataset(Dataset):
         item = self.flattened[idx]
         image = item["image"]
         task = item["task"]
-        image_token = "<|media_pad|>"
         
         if task == "vqa":
             question = item["question"]
             answer = item["answer"]
-            prompt = f"{image_token}\nQuestion: {question}\nAnswer:"
+            # Qwen3-VL uses <|vision_start|><|image_pad|><|vision_end|> for images
+            prompt = f"<|vision_start|><|image_pad|><|vision_end|>\nQuestion: {question}\nAnswer:"
             full_text = f"{prompt} {answer}"
         elif task == "caption":
             caption = item["text"]
-            prompt = f"{image_token}\nDescribe the contents of the image in detail:"
+            prompt = f"<|vision_start|><|image_pad|><|vision_end|>\nDescribe the contents of the image in detail:"
             full_text = f"{prompt} {caption}"     
         
         # Process with the VLM processor
@@ -442,11 +437,23 @@ class StreamingVLMDataset(Dataset):
             max_length=self.config.max_length,
         )
         
-        # Remove batch dimension added by processor
-        encoding = {k: v.squeeze(0) for k, v in encoding.items()}
+        # For Qwen3-VL, don't squeeze all dimensions blindly
+        # Keep image_grid_thw with shape [1, 3] for single image
+        # pixel_values should be [num_patches, channels, height, width]
+        encoding_processed = {}
+        for k, v in encoding.items():
+            if k in ["image_grid_thw"]:
+                # Keep shape [1, 3] for grid dimensions
+                encoding_processed[k] = v if v.dim() > 1 else v.unsqueeze(0)
+            elif k in ["pixel_values"]:
+                # Remove only the batch dimension (first dim), keep the rest
+                encoding_processed[k] = v.squeeze(0)
+            else:
+                # Remove batch dimension for text tensors
+                encoding_processed[k] = v.squeeze(0)
         
         # Create labels (same as input_ids for causal LM, with prompt masked)
-        labels = encoding["input_ids"].clone()
+        labels = encoding_processed["input_ids"].clone()
         
         # Mask the prompt tokens (only train on the answer/caption)
         prompt_encoding = self.processor(
@@ -459,13 +466,12 @@ class StreamingVLMDataset(Dataset):
         labels[:prompt_length] = -100  # Ignore prompt in loss
         
         # Mask padding tokens in labels
-        if "attention_mask" in encoding:
-            labels[encoding["attention_mask"] == 0] = -100
+        if "attention_mask" in encoding_processed:
+            labels[encoding_processed["attention_mask"] == 0] = -100
         
-        encoding["labels"] = labels
+        encoding_processed["labels"] = labels
         
-        return encoding
-
+        return encoding_processed
 
 class VLMDataset(Dataset):
     """
@@ -485,39 +491,26 @@ class VLMDataset(Dataset):
         self.config = dataset_config
         self.split = split
         
-        # Apply max_samples limit if specified
-        if self.config.max_samples and len(self.dataset) > self.config.max_samples:
-            self.dataset = self.dataset.select(range(self.config.max_samples))
     
     def __len__(self) -> int:
         return len(self.dataset)
     
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        """
-        Process a single example for VQA or captioning
-        """
-        item = self.dataset[idx]
+        item = self.flattened[idx]
+        image = item["image"]
+        task = item["task"]
         
-        # Load image
-        image = item[self.config.image_column]
-        if isinstance(image, str):
-            image = Image.open(image).convert("RGB")
-        elif not isinstance(image, Image.Image):
-            image = Image.fromarray(image).convert("RGB")
-        
-        image_token = "<|media_pad|>"
-
-        if self.config.task == "vqa":
-            question = item[self.config.vqa_question_column]
-            answer = item[self.config.vqa_answer_column]
-            prompt = f"{image_token}\nQuestion: {question}\nAnswer:"
+        if task == "vqa":
+            question = item["question"]
+            answer = item["answer"]
+            # Qwen3-VL uses <|vision_start|><|image_pad|><|vision_end|> for images
+            prompt = f"<|vision_start|><|image_pad|><|vision_end|>\nQuestion: {question}\nAnswer:"
             full_text = f"{prompt} {answer}"
+        elif task == "caption":
+            caption = item["text"]
+            prompt = f"<|vision_start|><|image_pad|><|vision_end|>\nDescribe the contents of the image in detail:"
+            full_text = f"{prompt} {caption}"     
         
-        elif self.config.task == "caption":
-            caption = item[self.config.caption_column]
-            prompt = f"{image_token}\nDescribe the contents of the image in detail:"
-            full_text = f"{prompt} {caption}"
-
         # Process with the VLM processor
         encoding = self.processor(
             images=image,
@@ -528,11 +521,42 @@ class VLMDataset(Dataset):
             max_length=self.config.max_length,
         )
         
-        # Remove batch dimension added by processor
-        encoding = {k: v.squeeze(0) for k, v in encoding.items()}
+        # Debug: Print shapes before processing
+        # print(f"Raw encoding shapes: {[(k, v.shape) for k, v in encoding.items()]}")
+        
+        # For Qwen3-VL, handle dimensions carefully
+        encoding_processed = {}
+        for k, v in encoding.items():
+            if k == "image_grid_thw":
+                # image_grid_thw should be [num_images, 3] where each row is [T, H, W]
+                # After processor it's [batch_size=1, num_images, 3]
+                # We need to squeeze the batch dimension but keep [num_images, 3]
+                if v.dim() == 3:  # [1, num_images, 3]
+                    encoding_processed[k] = v.squeeze(0)  # -> [num_images, 3]
+                elif v.dim() == 2:  # Already [num_images, 3]
+                    encoding_processed[k] = v
+                else:
+                    raise ValueError(f"Unexpected image_grid_thw shape: {v.shape}")
+                
+            elif k == "pixel_values":
+                # pixel_values should be [num_patches, C, H, W]
+                # After processor it's [batch_size=1, num_patches, C, H, W]
+                if v.dim() == 5:  # [1, num_patches, C, H, W]
+                    encoding_processed[k] = v.squeeze(0)  # -> [num_patches, C, H, W]
+                elif v.dim() == 4:  # Already [num_patches, C, H, W]
+                    encoding_processed[k] = v
+                else:
+                    raise ValueError(f"Unexpected pixel_values shape: {v.shape}")
+                    
+            else:
+                # For text tensors, squeeze batch dimension
+                if v.dim() > 1:
+                    encoding_processed[k] = v.squeeze(0)
+                else:
+                    encoding_processed[k] = v
         
         # Create labels (same as input_ids for causal LM, with prompt masked)
-        labels = encoding["input_ids"].clone()
+        labels = encoding_processed["input_ids"].clone()
         
         # Mask the prompt tokens (only train on the answer/caption)
         prompt_encoding = self.processor(
@@ -545,42 +569,37 @@ class VLMDataset(Dataset):
         labels[:prompt_length] = -100  # Ignore prompt in loss
         
         # Mask padding tokens in labels
-        if "attention_mask" in encoding:
-            labels[encoding["attention_mask"] == 0] = -100
+        if "attention_mask" in encoding_processed:
+            labels[encoding_processed["attention_mask"] == 0] = -100
         
-        encoding["labels"] = labels
+        encoding_processed["labels"] = labels
         
-        return encoding
+        return encoding_processed
 
 
 # ==================== Model Setup ====================
 
 def load_model_and_processor(model_config: ModelConfig):
     """
-    Load VLM model and processor with optional quantization
+    Load Qwen3-VL model and processor with optional quantization
     """
     print(f"\n{'='*60}")
     print(f"Loading model: {model_config.model_name}")
     print(f"{'='*60}\n")
     
-    # Load processor/tokenizer
-    try:
-        processor = AutoProcessor.from_pretrained(
-            model_config.model_name,
-            trust_remote_code=model_config.trust_remote_code
-        )
-    except:
-        # Fallback to tokenizer if processor not available
-        processor = AutoTokenizer.from_pretrained(
-            model_config.model_name,
-            trust_remote_code=model_config.trust_remote_code
-        )
+    # Load processor
+    processor = AutoProcessor.from_pretrained(
+        model_config.model_name,
+        trust_remote_code=model_config.trust_remote_code,
+        min_pixels=256*28*28,
+        max_pixels=1280*28*28,
+    )
     
     # Setup quantization
     quantization_config = model_config.get_quantization_config()
     
     # Load model
-    model = AutoModelForCausalLM.from_pretrained(
+    model = Qwen3VLForConditionalGeneration.from_pretrained(
         model_config.model_name,
         torch_dtype=getattr(torch, model_config.torch_dtype),
         device_map=model_config.device_map,
@@ -595,24 +614,8 @@ def load_model_and_processor(model_config: ModelConfig):
             use_gradient_checkpointing=False  
         )
         
-        # Manually enable gradient checkpointing on submodules that support it
-        print("Enabling gradient checkpointing on supported submodules...")
-        
-        # Enable for language model (DeepseekV3)
-        if hasattr(model, 'language_model') and hasattr(model.language_model, 'gradient_checkpointing_enable'):
-            try:
-                model.language_model.gradient_checkpointing_enable()
-                print("  ✓ Enabled gradient checkpointing for language_model")
-            except Exception as e:
-                print(f"  ✗ Could not enable for language_model: {e}")
-        
-        # Enable for vision tower if it supports it
-        if hasattr(model, 'vision_tower') and hasattr(model.vision_tower, 'gradient_checkpointing_enable'):
-            try:
-                model.vision_tower.gradient_checkpointing_enable()
-                print("  ✓ Enabled gradient checkpointing for vision_tower")
-            except Exception as e:
-                print(f"  ✗ Could not enable for vision_tower: {e}")
+        # DON'T manually enable gradient checkpointing - it causes issues with quantized models
+        print("Note: Gradient checkpointing disabled for quantized training")
     
     # Enable gradient checkpointing for inputs
     if hasattr(model, "enable_input_require_grads"):
@@ -624,20 +627,23 @@ def load_model_and_processor(model_config: ModelConfig):
         
         model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
         print("  ✓ Manually enabled input gradients")
-
-       
+    
+    # Disable use_cache to avoid conflicts with gradient checkpointing
+    model.config.use_cache = False
+    
     # Ensure model and tokenizer are in sync with special tokens
     tokenizer = processor.tokenizer if hasattr(processor, "tokenizer") else processor
-    # Updated tokens: {'eos_token_id': 163585, 'bos_token_id': 163584, 'pad_token_id': 163838}
-    if tokenizer.pad_token_id is None: tokenizer.pad_token_id = 163838
-    if tokenizer.bos_token_id is None: tokenizer.bos_token_id = 163584
-    if tokenizer.eos_token_id is None: tokenizer.eos_token_id = 163585
+    
+    # Qwen3-VL special tokens
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token_id = tokenizer.eos_token_id
     
     model.config.pad_token_id = tokenizer.pad_token_id
-    model.config.bos_token_id = tokenizer.bos_token_id
+    model.config.bos_token_id = tokenizer.bos_token_id if hasattr(tokenizer, 'bos_token_id') else None
     model.config.eos_token_id = tokenizer.eos_token_id
     
-    print(f"Tokenizer Special Tokens: PAD={tokenizer.pad_token_id}, BOS={tokenizer.bos_token_id}, EOS={tokenizer.eos_token_id}")
+    print(f"Tokenizer Special Tokens: PAD={tokenizer.pad_token_id}, EOS={tokenizer.eos_token_id}")
+    print(f"Model config: use_cache={model.config.use_cache}")
     print(f"\nModel loaded successfully!\n")
     
     return model, processor
@@ -645,15 +651,15 @@ def load_model_and_processor(model_config: ModelConfig):
 
 def apply_lora(model, lora_config: LoRAConfig):
     """
-    Apply LoRA adapters to the model with Kimi-VL specific handling
+    Apply LoRA adapters to the Qwen3-VL model
     """
     print("\n" + "="*60)
-    print("Applying LoRA to Kimi-VL Model")
+    print("Applying LoRA to Qwen3-VL Model")
     print("="*60 + "\n")
     
     # Optional: Inspect model structure first
     # Uncomment to see detailed module breakdown
-    #lora_config.inspect_model_modules(model)
+    # lora_config.inspect_model_modules(model)
     
     # Get PEFT config
     peft_config = lora_config.to_peft_config(model)
@@ -669,9 +675,9 @@ def apply_lora(model, lora_config: LoRAConfig):
     
     # Additional breakdown by component
     vision_trainable = sum(p.numel() for n, p in model.named_parameters() 
-                          if p.requires_grad and 'vision_tower' in n)
-    projector_trainable = sum(p.numel() for n, p in model.named_parameters() 
-                             if p.requires_grad and 'multi_modal_projector' in n)
+                          if p.requires_grad and 'visual' in n and 'merger' not in n)
+    merger_trainable = sum(p.numel() for n, p in model.named_parameters() 
+                          if p.requires_grad and 'merger' in n)
     language_trainable = sum(p.numel() for n, p in model.named_parameters() 
                             if p.requires_grad and 'language_model' in n)
     total_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -681,9 +687,9 @@ def apply_lora(model, lora_config: LoRAConfig):
         if vision_trainable > 0:
             print(f"  Vision Encoder: {vision_trainable:,} "
                   f"({vision_trainable/total_trainable*100:.2f}%)")
-        if projector_trainable > 0:
-            print(f"  Projector: {projector_trainable:,} "
-                  f"({projector_trainable/total_trainable*100:.2f}%)")
+        if merger_trainable > 0:
+            print(f"  Merger/Projector: {merger_trainable:,} "
+                  f"({merger_trainable/total_trainable*100:.2f}%)")
         if language_trainable > 0:
             print(f"  Language Model: {language_trainable:,} "
                   f"({language_trainable/total_trainable*100:.2f}%)")
@@ -770,6 +776,7 @@ def train_vlm(
     training_args = training_config.to_training_args()
 
     data_collator = VLMDataCollator()
+    
     # Create trainer
     trainer = Trainer(
         model=model,
@@ -811,9 +818,9 @@ def inference_example(model, processor, image_path: str, question: str = None):
     
     # Prepare prompt
     if question:
-        prompt = f"Question: {question}\nAnswer:"
+        prompt = f"<|vision_start|><|image_pad|><|vision_end|>\nQuestion: {question}\nAnswer:"
     else:
-        prompt = "Describe the contents of the image in detail:"
+        prompt = "<|vision_start|><|image_pad|><|vision_end|>\nDescribe the contents of the image in detail:"
     
     # Process inputs
     inputs = processor(
@@ -828,8 +835,9 @@ def inference_example(model, processor, image_path: str, question: str = None):
             **inputs,
             max_new_tokens=256,
             do_sample=True,
-            temperature=0.2,  # Recommended for Instruct model
-            top_p=0.9,
+            temperature=0.7,  # Recommended for Qwen3-VL Instruct
+            top_p=0.8,
+            top_k=20,
         )
     
     # Decode
@@ -842,24 +850,24 @@ def inference_example(model, processor, image_path: str, question: str = None):
 
 def main():
     """
-    Example usage with configurable parameters
+    Example usage with configurable parameters for Qwen3-VL-8B-Instruct
     """
     
     # Configure model
     model_config = ModelConfig(
-        model_name="moonshotai/Kimi-VL-A3B-Instruct",
+        model_name="Qwen/Qwen3-VL-8B-Instruct",
         torch_dtype="bfloat16",
         load_in_4bit=True,  # Use 4-bit quantization for memory efficiency
     )
     
     # Configure LoRA - Language attention only (recommended starting point)
     lora_config = LoRAConfig(
-        r=16,
-        lora_alpha=32,
+        r=8,  # Research suggests rank 8-16 works well for Qwen3 [web:5]
+        lora_alpha=16,
         lora_dropout=0.05,
         target_preset="language_attention",
         include_vision_encoder=False,
-        include_projector=False,
+        include_merger=False,
         include_language_model=True,
     )
     
@@ -874,13 +882,13 @@ def main():
     #     include_language_model=True,
     # )
     
-    # Full model (attention + MLP + projector)
+    # Full model (attention + MLP + merger)
     # lora_config = LoRAConfig(
     #     r=32,
     #     lora_alpha=64,
     #     target_preset="full_model",
     #     include_vision_encoder=True,
-    #     include_projector=True,
+    #     include_merger=True,
     #     include_language_model=True,
     # )
     
@@ -889,24 +897,23 @@ def main():
     #     r=16,
     #     lora_alpha=32,
     #     target_preset="custom",
-    #     custom_modules=["q_proj", "kv_a_proj_with_mqa", "kv_b_proj", "o_proj"],
+    #     custom_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     # )
     
     # Configure dataset
     dataset_config = DatasetConfig(
         dataset_name="VRSBench",
-        task="both",  # "vqa", "caption", or "both"
-        max_samples=None,  # Set to int for quick testing
+        task="caption",  # "vqa", "caption", or "both"
         max_length=2048,
     )
     
     # Configure training
     training_config = TrainingConfig(
-        output_dir="./kimi_vl_vrsbench_lora",
+        output_dir="./qwen3_vl_vrsbench_lora",
         num_train_epochs=3,
-        per_device_train_batch_size=2,
-        per_device_eval_batch_size=2,
-        gradient_accumulation_steps=8,
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=8,
+        gradient_accumulation_steps=1,
         learning_rate=2e-4,
         bf16=True,
         gradient_checkpointing=False,
@@ -922,14 +929,6 @@ def main():
         dataset_config,
         training_config,
     )
-    
-    # Example inference
-    # result = inference_example(
-    #     model, processor, 
-    #     "test_image.jpg", 
-    #     "What objects are visible in this image?"
-    # )
-    # print(result)
 
 
 if __name__ == "__main__":
