@@ -916,7 +916,7 @@ def main():
         gradient_accumulation_steps=1,
         learning_rate=2e-4,
         bf16=True,
-        gradient_checkpointing=False,
+        gradient_checkpointing=True,
         logging_steps=10,
         eval_steps=100,
         save_steps=100,
