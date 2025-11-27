@@ -1,3 +1,6 @@
+# training code on VRS Bench-like image annotation pairs 
+# inspiration for prompt from the Geo Chat code 
+# all tasks trained together 
 import os
 import json
 import torch
@@ -17,7 +20,7 @@ import random
 class VRSBenchDataset(Dataset):
     """Dataset class for VRS Bench annotations."""
     
-    def __init__(self, image_dir: str, annotation_dir: str, processor, max_samples=None):
+    def __init__(self, image_dir: str, annotation_dir: str, processor, max_samples=None): #OK
         self.image_dir = image_dir
         self.annotation_dir = annotation_dir
         self.processor = processor
@@ -38,7 +41,7 @@ class VRSBenchDataset(Dataset):
     def __len__(self):
         return len(self.annotations)
     
-    def create_training_samples(self, annotation: Dict) -> List[Dict]:
+    def create_training_samples(self, annotation: Dict) -> List[Dict]: #OK
         """Create multiple training samples from one annotation."""
         samples = []
         
@@ -47,14 +50,14 @@ class VRSBenchDataset(Dataset):
             "prompt": "Describe this image in detail.",
             "response": annotation["caption"]
         })
-        
+        ''' ignore obj referring for now 
         # 2. Object referring tasks
         for obj in annotation["objects"]:
             samples.append({
                 "prompt": f"Describe the {obj['obj_cls']} in this image.",
                 "response": obj["referring_sentence"]
             })
-        
+        '''
         # 3. QA pairs
         for qa in annotation["qa_pairs"]:
             samples.append({
@@ -71,28 +74,36 @@ class VRSBenchDataset(Dataset):
         image_path = os.path.join(self.image_dir, annotation["image"])
         image = Image.open(image_path).convert("RGB")
         
-        # Create training samples and randomly select one
+        # Get all training samples
         training_samples = self.create_training_samples(annotation)
-        sample = random.choice(training_samples)
         
-        # Format as conversation
-        conversation = [
-            {
+        #  CONSTRUCT MULTI-TURN CONVERSATION
+        conversation = []
+        
+        for i, sample in enumerate(training_samples):
+            # User Turn
+            user_content = []
+            
+            # The image is only passed in the very first turn of the conversation
+            if i == 0:
+                user_content.append({"type": "image"})
+            
+            user_content.append({"type": "text", "text": sample["prompt"]})
+            
+            conversation.append({
                 "role": "user",
-                "content": [
-                    {"type": "image"},
-                    {"type": "text", "text": sample["prompt"]}
-                ]
-            },
-            {
+                "content": user_content
+            })
+            
+            # Assistant Turn
+            conversation.append({
                 "role": "assistant",
                 "content": [
                     {"type": "text", "text": sample["response"]}
                 ]
-            }
-        ]
+            })
         
-        # Process inputs
+        # Process inputs (Apply template + Tokenize)
         text = self.processor.apply_chat_template(
             conversation, 
             tokenize=False, 
@@ -106,24 +117,49 @@ class VRSBenchDataset(Dataset):
             return_tensors="pt"
         )
         
-        # Prepare labels (mask the prompt part)
-        labels = inputs["input_ids"].clone()
+        # 2. UPDATED MULTI-TURN MASKING LOGIC
+        input_ids = inputs["input_ids"][0]
+        labels = input_ids.clone()
         
-        # Find where assistant response starts
-        assistant_token = self.processor.tokenizer.encode("assistant", add_special_tokens=False)[0]
-        for i, token_id in enumerate(inputs["input_ids"][0]):
-            if token_id == assistant_token:
-                # Mask everything before assistant response
-                labels[0, :i+2] = -100
-                break
+        # Mask everything by default (set to -100)
+        labels[:] = -100
+        
+        assistant_token_id = self.processor.tokenizer.encode("assistant", add_special_tokens=False)[0]
+        
+        eos_token_id = self.processor.tokenizer.eos_token_id
+        
+        # Iterate through input_ids to find all turns
+        i = 0
+        while i < len(input_ids):
+            # Find start of assistant response
+            if input_ids[i] == assistant_token_id:
+                # Move forward to skip the "assistant" header itself (usually followed by newline)
+                # Adjust offset (+2 or +1) depending on specific template spacing
+                start_response = i + 2 
+                
+                # Find the end of this response (the next EOS token)
+                end_response = len(input_ids)
+                for j in range(start_response, len(input_ids)):
+                    if input_ids[j] == eos_token_id:
+                        end_response = j + 1 # Include the EOS token in training (optional but recommended)
+                        break
+                
+                # Unmask the response (copy original input_ids to labels)
+                labels[start_response:end_response] = input_ids[start_response:end_response]
+                
+                # Move i to the end of this turn
+                i = end_response
+            else:
+                i += 1
         
         return {
             "input_ids": inputs["input_ids"].squeeze(0),
             "attention_mask": inputs["attention_mask"].squeeze(0),
             "pixel_values": inputs["pixel_values"].squeeze(0),
             "image_grid_thw": inputs["image_grid_thw"].squeeze(0),
-            "labels": labels.squeeze(0)
+            "labels": labels
         }
+    
 
 def collate_fn(batch):
     """Custom collate function to handle variable-length sequences and vision inputs."""
@@ -188,6 +224,7 @@ def main():
     OUTPUT_DIR = "./qwen2vl_lora_finetuned"
     
     # 4-bit quantization config
+    # to test with higher quantisation
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
@@ -195,12 +232,18 @@ def main():
         bnb_4bit_use_double_quant=True,
     )
     
+    local_rank = int(os.environ.get("LOCAL_RANK", -1))
+    device_map = {"": local_rank} if local_rank != -1 else "auto"
+
+    print(f"Loading model on device_map: {device_map}...")
+
+
     # Load model with quantization
     print("Loading model...")
     model = Qwen2VLForConditionalGeneration.from_pretrained(
         MODEL_NAME,
         quantization_config=bnb_config,
-        device_map="auto",
+        device_map=device_map,
         torch_dtype=torch.bfloat16,
         attn_implementation="flash_attention_2",  # Use flash attention if available
     )
@@ -220,7 +263,7 @@ def main():
     # Qwen2-VL structure: model.layers.{i}.self_attn.{q,k,v,o}_proj
     target_modules = []
     for name, module in model.named_modules():
-        if "model.layers" in name and "self_attn" in name and any(x in name for x in ["q_proj", "k_proj", "v_proj", "o_proj"]):
+        if "model.layers" in name and "self_attn" in name and any(x in name for x in ["q_proj", "v_proj"]):
             # Extract just the relative module name
             if "visual" not in name:  # Exclude vision encoder
                 module_name = name.split(".")[-1]
@@ -233,8 +276,8 @@ def main():
     lora_config = LoraConfig(
         r=16,  # Rank
         lora_alpha=32,  # Scaling factor
-        target_modules=target_modules,  # ["q_proj", "k_proj", "v_proj", "o_proj"]
-        lora_dropout=0.05,
+        target_modules=target_modules, 
+        lora_dropout=0,
         bias="none",
         task_type="CAUSAL_LM",
         modules_to_save=None,
@@ -252,13 +295,13 @@ def main():
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
         num_train_epochs=3,
-        per_device_train_batch_size=4,  # Reduced to 1 for stability
-        gradient_accumulation_steps=4,  # Increased to maintain effective batch size
+        per_device_train_batch_size=16, 
+        gradient_accumulation_steps=1, 
         learning_rate=2e-4,
         warmup_steps=100,
         logging_steps=10,
         save_steps=500,
-        save_total_limit=2,
+        save_total_limit=1,
         fp16=False,
         bf16=True,
         optim="paged_adamw_8bit",
