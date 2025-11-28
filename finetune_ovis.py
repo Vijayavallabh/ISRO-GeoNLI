@@ -6,10 +6,12 @@ from PIL import Image
 import logging
 from typing import Dict, Sequence
 import torch.nn.functional as F
-from trl import SFTTrainer, SFTConfig
+import os
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+from trl import SFTTrainer, SFTConfig
 
 # Define constants (from ovis/util/constants.py and model config)
 IGNORE_ID = -100
@@ -18,6 +20,10 @@ IMAGE_TOKEN = "<image>"
 # Special token IDs (from Ovis2.5 configuration)
 IMAGE_TOKEN_ID = 151665
 VISUAL_INDICATOR_IDS = [151666, 151667, 151668, 151669, 151670]
+
+# ============================================================================
+# 1. MODEL SETUP
+# ============================================================================
 
 logger.info("Loading model...")
 
@@ -33,7 +39,7 @@ model = AutoModelForCausalLM.from_pretrained(
     "AIDC-AI/Ovis2.5-9B",
     trust_remote_code=True,
     quantization_config=bnb_config,
-    device_map="auto"
+    device_map=torch.cuda.current_device()
 )
 
 # Use AutoProcessor
@@ -89,7 +95,6 @@ logger.info(f"Visual tokenizer trainable params: {vision_trainable:,} (should be
 logger.info(f"Visual embedding trainable params: {vte_trainable:,} (should be 0)")
 logger.info(f"LLM base trainable params: {llm_base_trainable:,}")
 logger.info(f"LLM LoRA trainable params: {llm_lora_trainable:,}")
-
 import os
 import json
 from datasets import Dataset
@@ -114,10 +119,15 @@ dataset = Dataset.from_list(samples)
 
 instruction = "Describe the content shown in the image in detail."
 
+
 # Training hyperparameters (matching official TrainingArguments)
 SINGLE_IMAGE_MIN_PIXELS = 448 * 448
 SINGLE_IMAGE_MAX_PIXELS = 1792 * 1344
 MULTIMODAL_MAX_LENGTH = 4096
+
+# ============================================================================
+# 3. PREPROCESSING FUNCTION
+# ============================================================================
 
 def preprocess_function(sample, idx):
     """
@@ -209,17 +219,150 @@ processed_dataset = dataset.map(
     with_indices=True,
     remove_columns=dataset.column_names,
 )
-class DataCollatorForMultimodalDataset:
-    """Official Ovis data collator"""
+
+processed_dataset.save_to_disk("./processed_vrsbench_dataset")
+logger.info("Processed dataset saved to ./processed_vrsbench_dataset")
+# from datasets import load_from_disk
+# processed_dataset = load_from_disk("./processed_vrsbench_dataset")
+import types
+def patched_merge_multimodal(self, input_ids, pixel_values, grid_thws):
+    """
+    Patched version avoiding in-place operations for gradient checkpointing compatibility.
+    Original code at lines 324-343 of modeling_ovis.py
+    """
+    # Import constants from the model's module
+    VISUAL_ATOM_ID = -300
+    INDICATOR_IDS = [-301, -302, -303, -304]
+    from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
     
+    placeholder_token_mask = torch.lt(input_ids, 0)
+    multimodal_embeds = self.get_wte()(torch.masked_fill(input_ids, placeholder_token_mask, 0))
+    
+    need_dummy_visual_input = pixel_values is None and (self.training or is_deepspeed_zero3_enabled())
+    if need_dummy_visual_input:
+        pixel_values, grid_thws = self.visual_tokenizer.get_dummy_visual_inputs()
+    
+    if pixel_values is not None:
+        # Get target device and dtype from multimodal_embeds
+        target_device = multimodal_embeds.device
+        target_dtype = multimodal_embeds.dtype
+        
+        # Get visual indicator embeddings on the correct device
+        visual_indicator_embeds = self.vte(torch.tensor(
+            list(range(self.config.visual_vocab_size - len(INDICATOR_IDS), self.config.visual_vocab_size)),
+            dtype=torch.long,
+            device=self.vte.weight.device
+        )).to(dtype=target_dtype, device=target_device)
+        
+        # Get visual tokens and embeddings
+        visual_tokens = self.visual_tokenizer(pixel_values, grid_thws)
+        visual_embeds = self.vte(visual_tokens).to(dtype=target_dtype, device=target_device)
+        
+        # Create a copy to avoid in-place modification
+        new_embeds = multimodal_embeds.clone()
+        
+        # Replace indicator embeddings using non-in-place operations
+        for i, indicator_id in enumerate(INDICATOR_IDS):
+            mask = (input_ids == indicator_id)
+            if mask.any():
+                # Get positions where this indicator appears
+                positions = mask.nonzero(as_tuple=False)
+                for pos in positions:
+                    batch_idx, seq_idx = pos[0].item(), pos[1].item()
+                    new_embeds[batch_idx, seq_idx] = visual_indicator_embeds[i]
+        
+        # Replace visual atom embeddings
+        visual_atom_mask = (input_ids == VISUAL_ATOM_ID)
+        if visual_atom_mask.any():
+            batch_size, seq_len = input_ids.shape
+            visual_idx = 0
+            
+            for b in range(batch_size):
+                positions = torch.where(visual_atom_mask[b])[0]
+                for pos in positions:
+                    if visual_idx < visual_embeds.size(0):
+                        new_embeds[b, pos] = visual_embeds[visual_idx]
+                        visual_idx += 1
+        
+        multimodal_embeds = new_embeds
+    
+    if need_dummy_visual_input:
+        multimodal_embeds = multimodal_embeds + visual_embeds.sum() * 0.0 + visual_indicator_embeds.sum() * 0.0
+    
+    return multimodal_embeds
+def patched_forward(
+    self,
+    input_ids,
+    attention_mask,
+    pixel_values,
+    grid_thws,
+    labels,
+    **kwargs
+):
+    """
+    Patched forward to avoid duplicate inputs_embeds argument
+    """
+    # Remove inputs_embeds from kwargs if present to avoid conflict
+    kwargs.pop('inputs_embeds', None)
+    
+    inputs_embeds = self.merge_multimodal(
+        input_ids=input_ids,
+        pixel_values=pixel_values,
+        grid_thws=grid_thws,
+    )
+    return self.llm(inputs_embeds=inputs_embeds, attention_mask=attention_mask, labels=labels, **kwargs)
+
+
+# Apply both patches
+base_model.forward = types.MethodType(patched_forward, base_model)
+base_model.merge_multimodal = types.MethodType(patched_merge_multimodal, base_model)
+
+
+logger.info("Applied merge_multimodal patch for gradient checkpointing ✓")
+
+class DataCollatorForMultimodalDataset:
     def __init__(self, text_tokenizer):
         self.text_tokenizer = text_tokenizer
 
     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
-        keys = ("input_ids", "pixel_values", "grid_thws", "attention_mask", "labels")
-        input_ids, pixel_values, grid_thws, attention_mask, labels = (
-            tuple(instance[key] for instance in instances) for key in keys
-        )
+        input_ids = []
+        pixel_values = []
+        grid_thws = []
+        attention_mask = []
+        labels = []
+        
+        for instance in instances:
+            # Handle input_ids
+            if isinstance(instance["input_ids"], list):
+                input_ids.append(torch.tensor(instance["input_ids"], dtype=torch.long))
+            else:
+                input_ids.append(instance["input_ids"])
+            
+            # Handle pixel_values - could be tensor, list, or None
+            pv = instance["pixel_values"]
+            if pv is not None:
+                if isinstance(pv, list):
+                    pv = torch.tensor(pv)
+                pixel_values.append(pv)
+            
+            # Handle grid_thws - could be tensor, list, or None
+            gt = instance["grid_thws"]
+            if gt is not None:
+                if isinstance(gt, list):
+                    gt = torch.tensor(gt)
+                grid_thws.append(gt)
+            
+            # Handle attention_mask
+            if isinstance(instance["attention_mask"], list):
+                attention_mask.append(torch.tensor(instance["attention_mask"], dtype=torch.bool))
+            else:
+                attention_mask.append(instance["attention_mask"])
+            
+            # Handle labels
+            if isinstance(instance["labels"], list):
+                labels.append(torch.tensor(instance["labels"], dtype=torch.long))
+            else:
+                labels.append(instance["labels"])
         
         # Pad input_ids
         input_ids = torch.nn.utils.rnn.pad_sequence(
@@ -228,12 +371,10 @@ class DataCollatorForMultimodalDataset:
             padding_value=self.text_tokenizer.pad_token_id
         )
         
-        # Concatenate pixel_values across batch
-        pixel_values = [x for x in pixel_values if x is not None]
+        # Concatenate pixel_values - now all elements are tensors
         pixel_values = torch.cat(pixel_values, dim=0) if len(pixel_values) > 0 else None
         
-        # Concatenate grid_thws across batch
-        grid_thws = [x for x in grid_thws if x is not None]
+        # Concatenate grid_thws - now all elements are tensors
         grid_thws = torch.cat(grid_thws, dim=0) if len(grid_thws) > 0 else None
         
         # Pad attention_mask
@@ -267,27 +408,41 @@ class DataCollatorForMultimodalDataset:
             labels=labels
         )
 
+# ============================================================================
+# 5. TRAINING CONFIGURATION
+# ============================================================================
+
 training_args = SFTConfig(
     output_dir="./ovis2.5-vrsbench-lora",
-        per_device_train_batch_size = 8,
-        gradient_accumulation_steps = 8,   # effective batch size ~= 16 on 1 GPU
-        # Train for full epochs instead of a tiny max_steps
-        num_train_epochs = 3,
-        # learning rate & schedule tuned for LoRA on 8B models
-        learning_rate = 1e-4,
-        warmup_ratio = 0.03,
-        lr_scheduler_type = "cosine",
-        weight_decay = 0.0,
+    
+    per_device_train_batch_size = 8,
+    gradient_accumulation_steps = 8,   # effective batch size ~= 16 on 1 GPU
+    # Train for full epochs instead of a tiny max_steps
+    num_train_epochs = 3,
+    # learning rate & schedule tuned for LoRA on 8B models
+    learning_rate = 1e-4,
+    warmup_ratio = 0.03,
+    lr_scheduler_type = "cosine",
+    weight_decay = 0.0,
 
-        logging_steps = 10,
-        optim = "adamw_8bit",
-        seed = 3407,
-        report_to = "none",
-        remove_unused_columns = False,
-        dataset_text_field = "",
-        dataset_kwargs = {"skip_prepare_dataset": True},
-        max_length = 1024,   # enough for instruction + long captions
+    logging_steps = 10,
+    optim = "adamw_8bit",
+    seed = 3407,
+    report_to="tensorboard",
+    remove_unused_columns=False,
+    dataset_text_field="",
+    dataset_kwargs={"skip_prepare_dataset": True},
+    
+    # Gradient checkpointing
+    gradient_checkpointing=True,
+    gradient_checkpointing_kwargs={"use_reentrant": False},
+    
+    max_length=1024,
 )
+
+# ============================================================================
+# 6. TRAINER SETUP
+# ============================================================================
 
 trainer = SFTTrainer(
     model=model,
@@ -296,6 +451,5 @@ trainer = SFTTrainer(
     data_collator=DataCollatorForMultimodalDataset(text_tokenizer=text_tokenizer),
 )
 
-# Start training
 logger.info("Starting training...")
 trainer.train()
