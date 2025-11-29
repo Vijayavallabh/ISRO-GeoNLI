@@ -1,20 +1,22 @@
+import os
+import json
+from typing import List, Dict, Union, Any, Tuple
+
 import numpy as np
 import torch
+from torch import nn
+from torch import amp
 from transformers import BertTokenizer, BertModel
-from typing import List, Dict, Union, Any, Tuple
 from shapely.geometry import Polygon
-import json
 import wandb
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
 class GeoNLIEvaluator:
     """
-    GeoNLI Evaluator with explicit hooks for spec-defined metrics.
-
-    Fill in all places marked with `# TODO(spec)` using the eval-metric
-    document (thresholds, penalties, weights, formulas, etc.).
+    GeoNLI Evaluator with GPU-optimized BERT usage and batched n-gram embeddings.
     """
 
     def __init__(
@@ -24,13 +26,37 @@ class GeoNLIEvaluator:
         image_width: int = None,
         image_height: int = None,
         metric_spec: Dict[str, Any] = None,
+        device: str = None,
+        use_fp16: bool = True,
     ):
-        # Language model for semantic similarity
+        # --------------------
+        # Device / precision
+        # --------------------
+        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.use_fp16 = use_fp16 and (self.device.type == "cuda")
+
+        # Enable common inference optimizations
+        torch.set_grad_enabled(False)
+        if self.device.type == "cuda":
+            torch.backends.cudnn.benchmark = True
+            # Allow TF32 on Ampere+ for faster matmuls if acceptable
+            if hasattr(torch.backends.cuda.matmul, "allow_tf32"):
+                torch.backends.cuda.matmul.allow_tf32 = True
+
+        # --------------------
+        # Language model
+        # --------------------
         self.tokenizer = BertTokenizer.from_pretrained(model_name)
         self.model = BertModel.from_pretrained(model_name)
+        self.model.to(self.device)
         self.model.eval()
 
+        # Simple CPU-side embedding cache: text -> tensor[hidden_size] (L2-normalized)
+        self._emb_cache: Dict[str, torch.Tensor] = {}
+
+        # --------------------
         # Image metadata
+        # --------------------
         self.spatial_resolution_m = spatial_resolution_m
         self.image_width = image_width
         self.image_height = image_height
@@ -38,7 +64,6 @@ class GeoNLIEvaluator:
         # =======================
         # METRIC SPEC (EDIT HERE)
         # =======================
-        # Default (fallback) weights; override from metric_spec if defined
         default_weights = {
             'captioning': 0.20,
             'grounding': 0.30,
@@ -52,27 +77,21 @@ class GeoNLIEvaluator:
 
         # Captioning metric hyperparameters
         self.captioning_cfg = {
-            # N-gram max order, length penalty alpha, etc.
             "N": metric_spec.get("captioning_N", 4),
             "alpha": metric_spec.get("captioning_alpha", 0.5),
             "mode": metric_spec.get("captioning_mode", "caption"),
-            # TODO(spec): if spec uses BLEU / METEOR / BERTScore instead,
-            # add the corresponding config flags here.
         }
 
         # Grounding metric hyperparameters
         self.grounding_cfg = {
-            # TODO(spec): set alpha, IoU thresholds, matching policy etc. from spec
             "alpha": metric_spec.get("grounding_alpha", 2.5),
             "coordinate_system": metric_spec.get("grounding_coordinate_system", "normalized"),
             "validate_bounds": metric_spec.get("grounding_validate_bounds", True),
-            # e.g. IoU threshold, detection threshold, etc.
             "iou_threshold": metric_spec.get("grounding_iou_threshold", 0.0),
         }
 
         # Numeric metric hyperparameters
         self.numeric_cfg = {
-            # TODO(spec): tune alpha or tolerance according to spec
             "alpha": metric_spec.get("numeric_alpha", 23.0),
             "default_unit": metric_spec.get("numeric_default_unit", None),
         }
@@ -106,21 +125,71 @@ class GeoNLIEvaluator:
     # Text / embedding utils
     # =====================
 
+    def get_bert_embeddings_batch(self, texts: List[str]) -> torch.Tensor:
+        """
+        Return L2-normalized CLS embeddings for a list of texts.
+
+        Embeddings are cached on CPU and moved to self.device on demand.
+        Uses torch.inference_mode and optional FP16 for fast GPU inference. [web:18][web:28]
+        """
+        if not texts:
+            hidden_size = self.model.config.hidden_size
+            return torch.empty(0, hidden_size, device=self.device)
+
+        # Select uncached texts
+        uncached = [t for t in texts if t not in self._emb_cache]
+
+        if uncached:
+            # Tokenize and move to device
+            inputs = self.tokenizer(
+                uncached,
+                return_tensors='pt',
+                padding=True,
+                truncation=True,
+                max_length=64,  # n-grams are short; keeps inference fast
+            )
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            # Inference-only forward pass
+            with torch.inference_mode():
+                if self.use_fp16:
+                    with amp.autocast(dtype=torch.float16):
+                        outputs = self.model(**inputs)
+                else:
+                    outputs = self.model(**inputs)
+
+            # CLS embeddings
+            cls_embs = outputs.last_hidden_state[:, 0, :].float()
+            # L2-normalize to make cosine similarity a dot product
+            cls_embs = nn.functional.normalize(cls_embs, p=2, dim=-1)
+
+            # Cache on CPU to save GPU memory
+            for text, emb in zip(uncached, cls_embs):
+                self._emb_cache[text] = emb.cpu()
+
+        # Stack in input order, move to device
+        stacked = torch.stack([self._emb_cache[t] for t in texts], dim=0).to(self.device)
+        return stacked
+
     def get_bert_embedding(self, text: str) -> torch.Tensor:
-        inputs = self.tokenizer(text, return_tensors='pt', padding=True, truncation=True)
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-        return outputs.last_hidden_state[:, 0, :].squeeze()
+        """
+        Backwards-compatible single-text helper using the batched path.
+        """
+        return self.get_bert_embeddings_batch([text])[0]
 
     def cosine_similarity(self, emb1: torch.Tensor, emb2: torch.Tensor) -> float:
-        return torch.nn.functional.cosine_similarity(
-            emb1.unsqueeze(0), emb2.unsqueeze(0)
-        ).item()
+        """
+        Cosine similarity between two embeddings (expects 1D tensors).
+        If embeddings are normalized, this is equivalent to dot product.
+        """
+        emb1 = emb1 / (emb1.norm(p=2) + 1e-8)
+        emb2 = emb2 / (emb2.norm(p=2) + 1e-8)
+        return torch.dot(emb1, emb2).item()
 
     def get_ngrams(self, tokens: List[str], n: int) -> List[str]:
         if n > len(tokens):
             return []
-        return [' '.join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
+        return [' '.join(tokens[i:i + n]) for i in range(len(tokens) - n + 1)]
 
     # =====================
     # Unit conversions
@@ -233,8 +302,10 @@ class GeoNLIEvaluator:
         epsilon: float = 1e-8,
     ) -> float:
         """
-        Current implementation is a semantic n-gram recall with length penalty.
-        Replace or adjust according to spec if a different caption metric is required.
+        Semantic n-gram recall with length penalty, GPU-optimized.
+
+        All n-grams across orders 1..N are embedded once in batch on GPU,
+        then cosine similarities are computed as dot products. [web:2][web:18]
         """
         candidate_tokens = candidate.lower().split()
         reference_tokens = reference.lower().split()
@@ -245,43 +316,53 @@ class GeoNLIEvaluator:
         if Lr == 0:
             return 0.0
 
-        Pn_list = []
+        # Collect n-grams for all orders and build a global set
+        all_ngrams_set = set()
+        ngram_lists: Dict[int, Tuple[List[str], List[str]]] = {}
+
         for n in range(1, N + 1):
             Cn = self.get_ngrams(candidate_tokens, n)
             Rn = self.get_ngrams(reference_tokens, n)
+            ngram_lists[n] = (Cn, Rn)
+            all_ngrams_set.update(Cn)
+            all_ngrams_set.update(Rn)
 
-            if len(Rn) == 0 or len(Cn) == 0:
+        if not all_ngrams_set:
+            return 0.0
+
+        all_ngrams = list(all_ngrams_set)
+        emb_mat = self.get_bert_embeddings_batch(all_ngrams)  # [K, d], already L2-normalized
+        idx_map = {ng: i for i, ng in enumerate(all_ngrams)}
+
+        Pn_list: List[float] = []
+
+        for n in range(1, N + 1):
+            Cn, Rn = ngram_lists[n]
+
+            if not Cn or not Rn:
                 Pn_list.append(0.0)
                 continue
 
-            # Precompute embeddings for candidate n-grams
-            c_emb_cache = {}
-            for c_ngram in Cn:
-                if c_ngram not in c_emb_cache:
-                    c_emb_cache[c_ngram] = self.get_bert_embedding(c_ngram)
+            cand_idx = torch.tensor([idx_map[x] for x in Cn], device=self.device, dtype=torch.long)
+            ref_idx = torch.tensor([idx_map[x] for x in Rn], device=self.device, dtype=torch.long)
 
-            sims = []
-            for r_ngram in Rn:
-                r_emb = self.get_bert_embedding(r_ngram)
-                max_sim = 0.0
-                for c_ngram, c_emb in c_emb_cache.items():
-                    sim = self.cosine_similarity(c_emb, r_emb)
-                    if sim > max_sim:
-                        max_sim = sim
-                sims.append(max_sim)
+            cand_embs = emb_mat[cand_idx]  # [C, d]
+            ref_embs = emb_mat[ref_idx]    # [R, d]
 
-            Pn = float(np.mean(sims)) if sims else 0.0
+            # Cosine similarity via dot product (embeddings unit-normalized)
+            sims = ref_embs @ cand_embs.t()  # [R, C]
+            max_sims, _ = sims.max(dim=1)    # best match for each reference n-gram
+            Pn = float(max_sims.mean().item())
             Pn_list.append(Pn)
 
         Pmax = max(Pn_list) if Pn_list else 0.0
 
-        # Length penalty (mode-dependent)
+        # Length penalty (same as original)
         if Lr == 0:
             LP = 1.0
         else:
             length_diff = abs(Lc - Lr) / max(Lr, 1)
             if mode == "caption":
-                # TODO(spec): if spec defines a different length penalty, edit here
                 LP = float(np.exp(-alpha * length_diff))
             elif mode == "semantic":
                 LP = float(np.exp(alpha * (1.0 - length_diff)))
@@ -292,12 +373,6 @@ class GeoNLIEvaluator:
         return float(np.clip(score, 0.0, 1.0))
 
     def evaluate_captioning(self, candidate: str, reference: str) -> float:
-        """
-        Wrapper for captioning metric.
-
-        TODO(spec): If the spec says 'use BLEU-4 / CIDEr / METEOR / BERTScore',
-        replace this function body with that metric implementation.
-        """
         cfg = self.captioning_cfg
         return self.bert_bleu_score(
             candidate,
@@ -390,9 +465,6 @@ class GeoNLIEvaluator:
     ) -> float:
         """
         Evaluate grounding using IoU and a count penalty.
-
-        TODO(spec): adjust alpha, IoU thresholding, matching (greedy/Hungarian),
-        and handling of empty predictions/GT to match the document.
         """
         cfg = self.grounding_cfg
         alpha = cfg["alpha"]
@@ -424,16 +496,14 @@ class GeoNLIEvaluator:
         N_pred = len(pred_boxes)
         N_ref = len(gt_boxes)
 
-        # TODO(spec): define exact behaviour for these corner cases
         if N_pred == 0 and N_ref == 0:
-            return 1.0  # perfect match when both are empty, if spec says so
+            return 1.0
         if N_ref == 0 and N_pred > 0:
             return 0.0
         if N_pred == 0 and N_ref > 0:
             return 0.0
 
-        # Count penalty (current exp(-alpha * |N_pred - N_ref|))
-        # Replace this formula if spec uses another definition.
+        # Count penalty
         count_penalty = float(np.exp(-alpha * abs(N_pred - N_ref)))
 
         # Greedy one-to-one matching by IoU
@@ -454,7 +524,6 @@ class GeoNLIEvaluator:
 
             if best_gt_idx >= 0:
                 used_gt.add(best_gt_idx)
-                # Optional IoU thresholding
                 if max_iou >= iou_thresh:
                     ious.append(max_iou)
 
@@ -468,10 +537,6 @@ class GeoNLIEvaluator:
     # =====================
 
     def evaluate_binary(self, prediction: str, ground_truth: str) -> float:
-        """
-        TODO(spec): If spec treats binary as accuracy (0/1), this is fine.
-        If there is partial credit or special tokens, implement it here.
-        """
         pred_normalized = prediction.strip().lower()
         gt_normalized = ground_truth.strip().lower()
         return 1.0 if pred_normalized == gt_normalized else 0.0
@@ -487,12 +552,6 @@ class GeoNLIEvaluator:
         unit: str = None,
         prediction_unit: str = None,
     ) -> float:
-        """
-        Numeric evaluation with exponential decay on relative error.
-
-        TODO(spec): replace alpha, exact scoring curve, or introduce
-        tolerance windows according to the spec.
-        """
         alpha = self.numeric_cfg["alpha"]
 
         # Unit conversion
@@ -525,10 +584,6 @@ class GeoNLIEvaluator:
     # =====================
 
     def evaluate_semantic(self, prediction: str, ground_truth: str) -> float:
-        """
-        TODO(spec): if spec defines a dedicated semantic similarity metric,
-        implement it here. Currently reuses bert_bleu_score in 'semantic' mode.
-        """
         return self.bert_bleu_score(
             prediction,
             ground_truth,
@@ -542,13 +597,6 @@ class GeoNLIEvaluator:
     # =====================
 
     def compute_final_score(self, scores: Dict[str, float]) -> float:
-        """
-        Aggregate per-task scores into a final score.
-
-        TODO(spec): if the spec defines another aggregation rule
-        (e.g. geometric mean, min, or re-normalized weighted sum),
-        implement it here.
-        """
         final_score = 0.0
         for task, weight in self.weights.items():
             if task in scores:
@@ -611,12 +659,6 @@ class GeoNLIEvaluator:
         ground_truths: Dict[str, Union[str, float, List]],
         metadata: Dict[str, Any] = None,
     ) -> Dict[str, float]:
-        """
-        Run all task-specific metrics and aggregate.
-
-        Ensure this matches the spec about which tasks are present and
-        whether any task should be optional / ignored.
-        """
         scores: Dict[str, float] = {}
         metadata = metadata or {}
 
@@ -664,14 +706,16 @@ if __name__ == "__main__":
     print("Initializing GeoNLI Evaluator ...")
     print("=" * 60)
 
-    # TODO(spec): optionally load metric_spec from a JSON/YAML config
     metric_spec = {}
     evaluator = GeoNLIEvaluator(metric_spec=metric_spec)
 
-    predictions, metadata = evaluator.load_predictions_from_json(
-        'sample_dataset_inter_iit_v1_3/sample2_response.json'
+    json_path = os.path.join(
+        'sample_dataset_inter_iit_v1_3',
+        'sample2_response.json'
     )
+    predictions, metadata = evaluator.load_predictions_from_json(json_path)
 
+    print(f"Device: {evaluator.device}")
     print(f"Spatial Resolution: {evaluator.spatial_resolution_m} meters/pixel")
     print(f"Image Dimensions: {evaluator.image_width} x {evaluator.image_height} pixels")
     print("OBB Format: [center_x, center_y, width, height, angle]")
