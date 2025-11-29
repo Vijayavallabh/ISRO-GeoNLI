@@ -1,0 +1,24 @@
+{
+  "input_image": {
+    "image_id": "sample.png",
+    "image_url": "https://example.com/image.jpg",
+    "metadata": {
+      "width": 512,
+      "height": 512,
+      "spatial_resolution_m": 1.57
+    }
+  },
+  "queries": {
+    "caption_query": {
+      "instruction": "Generate a detailed caption."
+    },
+    "grounding_query": {
+      "instruction": "Locate the track field."
+    },
+    "attribute_query": {
+      "binary": {"instruction": "Is there any aeroplane?"},
+      "numeric": {"instruction": "What is the area of the track field?"},
+      "semantic": {"instruction": "What is the color of the building?"}
+    }
+  }
+}
