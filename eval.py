@@ -175,51 +175,70 @@ class GeoNLIEvaluator:
             return []
         return [' '.join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
     
-    def bert_bleu_score(self, candidate: str, reference: str, N: int = 4, epsilon: float = 1e-8) -> float:
-
+    def bert_bleu_score(self,candidate: str,reference: str,N: int = 4,alpha: float = 0.5,mode: str = "caption",epsilon: float = 1e-8,) -> float:
         candidate_tokens = candidate.lower().split()
         reference_tokens = reference.lower().split()
-        
-        if len(candidate_tokens) == 0:
-            return 0.0
-        
-        log_precisions = []
-        
-        for n in range(1, N + 1):
 
-            candidate_ngrams = self.get_ngrams(candidate_tokens, n)
-            reference_ngrams = self.get_ngrams(reference_tokens, n)
-            
-            if len(candidate_ngrams) == 0:
-                log_precisions.append(np.log(epsilon))
+        Lc = len(candidate_tokens)
+        Lr = len(reference_tokens)
+
+        if Lr == 0:
+            # No reference content; define score as 0
+            return 0.0
+
+        Pn_list = []
+
+        for n in range(1, N + 1):
+            Cn = self.get_ngrams(candidate_tokens, n)
+            Rn = self.get_ngrams(reference_tokens, n)
+
+            if len(Rn) == 0 or len(Cn) == 0:
+                Pn_list.append(0.0)
                 continue
-            
-            if len(reference_ngrams) == 0:
-                log_precisions.append(np.log(epsilon))
-                continue
-            
-            total_similarity = 0.0
-            for c_ngram in candidate_ngrams:
+
+            # Precompute embeddings for candidate n-grams
+            c_emb_cache = {}
+            for c_ngram in Cn:
+                if c_ngram not in c_emb_cache:
+                    c_emb_cache[c_ngram] = self.get_bert_embedding(c_ngram)
+
+            # Semantic recall over reference n-grams
+            sims = []
+            for r_ngram in Rn:
+                r_emb = self.get_bert_embedding(r_ngram)
                 max_sim = 0.0
-                c_emb = self.get_bert_embedding(c_ngram)
-                
-                for r_ngram in reference_ngrams:
-                    r_emb = self.get_bert_embedding(r_ngram)
+                for c_ngram, c_emb in c_emb_cache.items():
                     sim = self.cosine_similarity(c_emb, r_emb)
-                    max_sim = max(max_sim, sim)
-                
-                total_similarity += max_sim
-            
-            precision_n = total_similarity / len(candidate_ngrams)
-            log_precisions.append(np.log(precision_n + epsilon))
-        
-        bert_bleu = np.exp(np.mean(log_precisions))
-        
-        return float(np.clip(bert_bleu, 0, 1))
+                    if sim > max_sim:
+                        max_sim = sim
+                sims.append(max_sim)
+
+            Pn = float(np.mean(sims)) if sims else 0.0
+            Pn_list.append(Pn)
+
+        Pmax = max(Pn_list) if Pn_list else 0.0
+
+        # Length penalty
+        if Lr == 0:
+            LP = 1.0
+        else:
+            length_diff = abs(Lc - Lr) / max(Lr, 1)
+            if mode == "caption":
+                # LP = exp(-alpha * |Lc - Lr| / Lr)
+                LP = float(np.exp(-alpha * length_diff))
+            elif mode == "semantic":
+                # LP = exp(alpha * (1 - |Lc - Lr| / Lr))
+                LP = float(np.exp(alpha * (1.0 - length_diff)))
+            else:
+                # Fallback: no length penalty
+                LP = 1.0
+
+        score = LP * Pmax
+        return float(np.clip(score, 0.0, 1.0))
+
     
     def evaluate_captioning(self, candidate: str, reference: str) -> float:
-
-        return self.bert_bleu_score(candidate, reference, N=4)
+        return self.bert_bleu_score(candidate, reference, N=4, alpha=0.5, mode="caption")
     
     def polygon_area(self, vertices: np.ndarray) -> float:
 
@@ -294,11 +313,7 @@ class GeoNLIEvaluator:
         
         return intersection_area / union_area
     
-    def evaluate_grounding(self, pred_boxes: List[List[float]], 
-                          gt_boxes: List[List[float]], alpha: float = 1.0,
-                          coordinate_system: str = 'normalized',
-                          validate_bounds: bool = False) -> float:
-
+    def evaluate_grounding(self,pred_boxes: List[List[float]],gt_boxes: List[List[float]],alpha: float = 2.5,coordinate_system: str = 'normalized',validate_bounds: bool = False) -> float:
         if coordinate_system == 'meter':
             if self.spatial_resolution_m is None:
                 raise ValueError("spatial_resolution_m required for meter coordinates")
@@ -309,7 +324,7 @@ class GeoNLIEvaluator:
                 raise ValueError("image dimensions required for normalized coordinates")
             pred_boxes = [self.obb_normalized_to_absolute(box) for box in pred_boxes]
             gt_boxes = [self.obb_normalized_to_absolute(box) for box in gt_boxes]
-        
+
         if validate_bounds:
             for i, box in enumerate(pred_boxes):
                 if not self.validate_obb_bounds(box, normalized=False):
@@ -317,22 +332,22 @@ class GeoNLIEvaluator:
             for i, box in enumerate(gt_boxes):
                 if not self.validate_obb_bounds(box, normalized=False):
                     print(f"Warning: Ground truth box {i} is out of bounds")
-        
+
         N_pred = len(pred_boxes)
         N_ref = len(gt_boxes)
-        
-        count_penalty = np.exp(-alpha * abs(N_pred - N_ref))
-        
+
+        count_penalty = float(np.exp(-alpha * abs(N_pred - N_ref)))
+
         if N_pred == 0 or N_ref == 0:
             return count_penalty * 0.0
-        
+
         ious = []
         used_gt = set()
-        
+
         for pred_box in pred_boxes:
             max_iou = 0.0
             best_gt_idx = -1
-            
+
             for gt_idx, gt_box in enumerate(gt_boxes):
                 if gt_idx in used_gt:
                     continue
@@ -340,16 +355,16 @@ class GeoNLIEvaluator:
                 if iou > max_iou:
                     max_iou = iou
                     best_gt_idx = gt_idx
-            
+
             if best_gt_idx >= 0:
                 used_gt.add(best_gt_idx)
                 ious.append(max_iou)
-        
-        mean_iou = np.mean(ious) if ious else 0.0
-        
+
+        mean_iou = float(np.mean(ious)) if ious else 0.0
         grounding_score = count_penalty * mean_iou
-        
-        return float(np.clip(grounding_score, 0, 1))
+
+        return float(np.clip(grounding_score, 0.0, 1.0))
+
     
     def evaluate_binary(self, prediction: str, ground_truth: str) -> float:
 
@@ -358,13 +373,12 @@ class GeoNLIEvaluator:
         
         return 1.0 if pred_normalized == gt_normalized else 0.0
     
-    def evaluate_numeric(self, prediction: float, ground_truth: float,
-                        unit: str = None, prediction_unit: str = None) -> float:
-
+    def evaluate_numeric(self,prediction: float,ground_truth: float,unit: str = None,prediction_unit: str = None,alpha: float = 23.0,) -> float:
+        # Unit conversion (unchanged)
         if unit and prediction_unit and unit != prediction_unit:
             if self.spatial_resolution_m is None:
                 raise ValueError("spatial_resolution_m required for unit conversion")
-            
+
             if prediction_unit == 'pixels' and unit == 'meters':
                 prediction = self.pixels_to_meters(prediction)
             elif prediction_unit == 'meters' and unit == 'pixels':
@@ -375,18 +389,21 @@ class GeoNLIEvaluator:
                 prediction = self.square_meters_to_pixel_area(prediction)
             else:
                 raise ValueError(f"Unsupported unit conversion: {prediction_unit} to {unit}")
-   
-        score = np.exp(-abs(prediction - ground_truth))
-        
-        return float(np.clip(score, 0, 1))
+
+        # Relative error–based exponential decay
+        if ground_truth == 0:
+            # Degenerate case: fall back to absolute error
+            err = abs(prediction - ground_truth)
+        else:
+            err = abs(prediction - ground_truth) / abs(ground_truth)
+
+        score = float(np.exp(-alpha * err))
+        return float(np.clip(score, 0.0, 1.0))
+
     
     def evaluate_semantic(self, prediction: str, ground_truth: str) -> float:
-        # For semantic evaluation, use direct cosine similarity on the full text
-        # This avoids issues with short texts in BLEU-like scoring
-        pred_emb = self.get_bert_embedding(prediction.lower())
-        gt_emb = self.get_bert_embedding(ground_truth.lower())
-        similarity = self.cosine_similarity(pred_emb, gt_emb)
-        return float(np.clip(similarity, 0, 1))
+        return self.bert_bleu_score(prediction,ground_truth,N=4,alpha=0.5,mode="semantic",)
+
     
     def compute_final_score(self, scores: Dict[str, float]) -> float:
 
