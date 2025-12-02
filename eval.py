@@ -547,5 +547,5 @@ def main():
     print(f"Final Weighted Score: {final_score:.4f}")
     print("=" * 50)
 
-if name == "main":
+if __name__ == "__main__":
     main()
