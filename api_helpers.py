@@ -227,14 +227,147 @@ def image_to_base64(image: Image.Image) -> str:
 # ============================================================================
 
 def format_grounding_response(detections):
-    """Convert pipeline detections to API response format."""
+    """
+    Convert pipeline detections to API response format.
+    """
     response = []
+
     for det in detections or []:
         obb = det.get("obb")
-        if obb:
-            (cx, cy), (w, h), angle = obb
+        if obb and len(obb) == 8:
             response.append({
                 "object-id": str(det.get("id", "")),
-                "obbox": [float(cx), float(cy), float(w), float(h), float(angle)]
+                "obbox": [float(v) for v in obb],  # 8 corner coords
             })
+
     return response
+
+
+
+# ============================================================================
+# VQA Output Normalization Functions
+# ============================================================================
+
+def normalize_binary_vqa_answer(answer: str) -> str:
+    """
+    Normalize binary VQA answers to standard "yes" or "no" format.
+    
+    Handles various formats:
+    - true/false, True/False, TRUE/FALSE
+    - yes/no, Yes/No, YES/NO
+    - 1/0
+    - "affirmative"/"negative" variations
+    
+    Args:
+        answer: Raw answer string from VLM/SAM
+        
+    Returns:
+        Standardized "yes" or "no" string
+    """
+    if not answer:
+        return "no"
+    
+    # Convert to lowercase and strip whitespace
+    answer_clean = str(answer).strip().lower()
+    
+    # Extract first word if multi-word response
+    first_word = answer_clean.split()[0] if answer_clean.split() else answer_clean
+    
+    # Positive patterns
+    positive_patterns = [
+        "yes", "true", "1", "affirmative", "correct", "indeed",
+        "absolutely", "certainly", "definitely", "present", "exists"
+    ]
+    
+    # Negative patterns
+    negative_patterns = [
+        "no", "false", "0", "negative", "incorrect", "nope",
+        "absent", "missing", "none", "not"
+    ]
+    
+    # Check positive patterns
+    for pattern in positive_patterns:
+        if pattern in answer_clean or first_word == pattern:
+            return "yes"
+    
+    # Check negative patterns
+    for pattern in negative_patterns:
+        if pattern in answer_clean or first_word == pattern:
+            return "no"
+    
+    # Default to "no" if uncertain
+    return "no"
+
+
+def normalize_numeric_vqa_answer(answer: str):
+    """
+    Normalize numeric VQA answers to float format.
+    
+    Handles various formats:
+    - "5" -> 5.0
+    - "5.5" -> 5.5
+    - "approximately 5" -> 5.0
+    - "5 buildings" -> 5.0
+    - "about 3.2 square kilometers" -> 3.2
+    - "zero" -> 0.0
+    - "one" -> 1.0
+    
+    Args:
+        answer: Raw answer string from VLM/SAM
+        
+    Returns:
+        Float value extracted from answer, or 0.0 if parsing fails
+    """
+    if not answer:
+        return ""
+    
+    answer_clean = str(answer).strip().lower()
+    
+    # Word to number mapping for common words
+    word_to_num = {
+        "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
+        "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+        "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+        "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
+        "eighteen": 18, "nineteen": 19, "twenty": 20, "thirty": 30,
+        "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70,
+        "eighty": 80, "ninety": 90, "hundred": 100, "thousand": 1000,
+        "none": 0, "no": 0
+    }
+    
+    # Check for number words first
+    for word, num in word_to_num.items():
+        if word in answer_clean.split():
+            return float(num)
+    
+    # Extract all numbers (integers and floats) from the string
+    numbers = re.findall(r'-?\d+\.?\d*', answer_clean)
+    
+    if numbers:
+        try:
+            return float(numbers[0])
+        except (ValueError, IndexError):
+            pass
+    
+    # Special cases
+    if any(word in answer_clean for word in ["none", "zero", "no ", "not any"]):
+        return 0.0
+    
+    # If we can't extract a number, return 0.0
+    return answer
+
+def normalize_vqa_answer(answer: str, question_type: str):
+    """
+    Main normalization function that routes to appropriate normalizer.
+    
+    Args:
+        answer: Raw answer from VQA system
+        question_type: One of "binary", "numeric", or "semantic"
+        
+    Returns:
+        Normalized answer (str for binary/semantic, float for numeric)
+    """
+    if question_type == "binary":
+        return normalize_binary_vqa_answer(answer)
+    elif question_type == "numeric":
+        return normalize_numeric_vqa_answer(answer)

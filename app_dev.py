@@ -17,7 +17,8 @@ from api_helpers import (
     decode_image_from_base64,
     get_image_from_input,
     image_to_base64,
-    format_grounding_response
+    format_grounding_response,
+    normalize_vqa_answer
 )
 from api_models import (
     ImageMetadata,
@@ -155,7 +156,9 @@ async def process_structured(request: StructuredRequest):
         
         if request.queries.attribute_query.binary:
             instruction = request.queries.attribute_query.binary["instruction"]
-            answer = pipeline.answer_question(image, instruction, question_type="binary")
+            raw_answer = pipeline.answer_question(image, instruction, question_type="binary")
+            # Normalize to yes/no
+            answer = normalize_vqa_answer(raw_answer, "binary")
             attr_results["binary"] = {
                 "instruction": instruction,
                 "response": answer,
@@ -164,7 +167,9 @@ async def process_structured(request: StructuredRequest):
         
         if request.queries.attribute_query.numeric:
             instruction = request.queries.attribute_query.numeric["instruction"]
-            answer = pipeline.answer_question(image, instruction, question_type="numeric")
+            raw_answer = pipeline.answer_question(image, instruction, question_type="numeric")
+            # Normalize to float
+            answer = normalize_vqa_answer(raw_answer, "numeric")
             attr_results["numeric"] = {
                 "instruction": instruction,
                 "response": answer,
