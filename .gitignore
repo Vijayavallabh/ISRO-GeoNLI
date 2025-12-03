@@ -1,0 +1,13 @@
+# Virtual environments
+venv/
+.venv/
+env/
+prod_env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+model/.env
