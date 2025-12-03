@@ -89,7 +89,7 @@ class RSPipeline:
             image, query, score_threshold
         )
     
-def answer_question(self, image, query, detections=None, 
+    def answer_question(self, image, query, detections=None, 
                        question_type="numeric", gsd=1.0):
         """
         Answer a question about the image using the Smart Router.
