@@ -79,22 +79,35 @@ SATELLITE_TOOLS = [
             },
             "required": ["expression"]
         }
+    },
+    {
+        "name": "SAM_tool",
+        "description": "Uses SAM3 to detect objects in the image. Takes in a noun phrase as an input and returns mask id, oriented bounding box, confidence, and area of the object for each instance of the object in the image.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "noun_phrase": {
+                    "type": "string",
+                    "description": "The noun phrase to use as a text prompt for SAM3."
+                }
+            },
+            "required": ["noun_phrase"]
+        }
     }
 ]
 
-TOOL_MAP = {
-    "comparison_tool": comparison_tool,
-    "distance_tool": distance_tool,
-    "calculator_tool": calculator_tool
-}
-
-
 class SatelliteVQAAgent:
     def __init__(self, vlm_model, vlm_processor, sam_interface=None):
-        self.model = vlm_model
-        self.processor = vlm_processor
-        self.sam = sam_interface
+        self.model = vlm_model # vlm_model has been instantiated in rs_pipeline.py
+        self.processor = vlm_processor # vlm_processor has been instantiated in rs_pipeline.py
+        self.sam = sam_interface 
         self.tools_schema = SATELLITE_TOOLS
+        self.tool_map = {
+            "comparison_tool": comparison_tool,
+            "distance_tool": distance_tool,
+            "calculator_tool": calculator_tool,
+            "SAM_tool": sam_interface.segment_image
+        }
 
     def _format_system_prompt(self, metadata: Dict):
         """
@@ -161,7 +174,7 @@ class SatelliteVQAAgent:
 
             # 3. Generate Model Output
             # print(f"Step {step + 1}: Generating thought...")
-            generated_ids = self.model.generate(**inputs, max_new_tokens=512)
+            generated_ids = self.model.generate(**inputs, max_new_tokens=1024)
             
             generated_ids_trimmed = [
                 out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
@@ -216,8 +229,8 @@ class SatelliteVQAAgent:
                 tool_name = data.get("tool")
                 arguments = data.get("arguments")
                 
-                if tool_name in TOOL_MAP:
-                    func = TOOL_MAP[tool_name]
+                if tool_name in self.tool_map:
+                    func = self.tool_map[tool_name]
                     # Unpack arguments into function
                     result = func(**arguments)
                     return {"tool": tool_name, "result": result}
