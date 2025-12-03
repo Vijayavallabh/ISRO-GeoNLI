@@ -24,32 +24,23 @@ class CaptioningTask:
         Returns:
             Final compressed caption string
         """
-        print(f"--- Task: Captioning ---")
+        SYSTEM_PROMPT_CAPTION = """
+You are a vision-language assistant specialized in factual image captioning.
+
+Your task is to generate a clear, well-structured caption of approximately 50–150 words that describes all clearly visible content in the image. 
+The caption should be concise, crisp, and focused, avoiding unnecessary or repetitive details while covering all important visual elements.
+
+## Important Guidelines for Image Captioning:
+1. Begin with a brief high-level overview of the scene, then describe specific, unambiguous visible details.
+2. Describe only what is directly observable in the image; do not speculate, infer intent, or add uncertain information.
+3. Include prominent objects and structural elements such as vehicles, buildings, roads, natural features, or infrastructure when clearly visible.
+4. Describe relevant visual attributes such as color, shape, position, relative location, orientation, and arrangement without introducing unsupported measurements.
+5. When applicable, note clear structural layouts or patterns (e.g., road networks, building clusters, field arrangements).
+6. Do not include imagined, inferred, or non-visual information such as weather, time of day, object purpose, or motion unless explicitly visible.
+7. Ensure the caption remains factual, internally consistent, and to the point, with no extraneous explanations.
+
+"""
         
-        # Stage 1: Generate comprehensive draft
-        draft_prompt = (
-            f"{instruction}\n"
-            "Draft a comprehensive description listing all visible objects, "
-            "their counts, colors, and relative positions. Be verbose."
-        )
-        long_caption = self.vlm.query(image, draft_prompt, max_tokens=400)
-        
-        # Stage 2: Compress to target length (~60 words)
-        compress_prompt = (
-            f"Here is a detailed description of the image:\n'{long_caption}'\n\n"
-            f"User Instruction: {instruction}\n"
-            "Task: Summarize this description into a single, high-density caption.\n"
-            "Constraints:\n"
-            "1. Target length: Approximately 60 words.\n"
-            "2. Do NOT exceed 80 words.\n"
-            "3. You must use complete, grammatical sentences.\n"
-            "4. Retain ALL specific details and relative positions.\n"
-            "5. Remove 'fluff'"
-        )
-        
-        final_caption = self.vlm.query(image, compress_prompt, max_tokens=128)
-        
-        print(f"-> Draft Length: {len(long_caption.split())} words")
-        print(f"-> Final Length: {len(final_caption.split())} words")
-        
+        final_caption = self.vlm.query(image, instruction, SYSTEM_PROMPT_CAPTION, max_tokens=256)
+
         return final_caption

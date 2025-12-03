@@ -85,7 +85,7 @@ class RSPipeline:
             image, query, gsd, score_threshold
         )
     
-    def answer_question(self, image, query, detections=None, 
+    def answer_question(self, image, query, 
                        question_type="numeric", gsd=1.0):
         """
         Answer a question about the image.
@@ -100,14 +100,11 @@ class RSPipeline:
         Returns:
             Answer string
         """
-        if detections is None:
-            detections = []
-        
         if question_type == "numeric":
-            return self.vqa.answer_numeric_question(image, query, detections, gsd)
+            return self.vqa.answer_numeric_question(image, query, gsd)
         elif question_type == "binary":
-            return self.vqa.answer_binary_question(image, query, detections, gsd)
+            return self.vqa.answer_binary_question(image, query, gsd)
         elif question_type == "semantic":
-            return self.vqa.answer_semantic_question(image, query, detections, gsd)
+            return self.vqa.answer_semantic_question(image, query, gsd)
         else:
             raise ValueError(f"Unknown question type: {question_type}")
