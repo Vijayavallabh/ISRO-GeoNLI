@@ -57,7 +57,7 @@ class RSPipeline:
         self.grounding = GroundingTask(self.vlm, self.sam3)
         self.vqa = VQATask(self.vlm, self.grounding, self.sam3)
         
-        print("Pipeline Initialization Complete.")
+        logger.info("Pipeline Initialization Complete.")
     
     def generate_caption(self, image, instruction):
         """

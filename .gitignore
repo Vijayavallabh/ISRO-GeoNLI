@@ -10,3 +10,8 @@ venv/
 # Environment variables
 .env
 model/.env
+
+# Log files
+logs/
+*.log
+app.log

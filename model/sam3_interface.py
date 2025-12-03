@@ -15,7 +15,7 @@ class SAM3Interface:
         self.geo_calc = GeoCalculator(spatial_resolution_m=spatial_resolution_m)
 
     def segment_image(self, image: Image.Image, target_class):
-        try
+        try:
             inputs = self.processor(
                 images=image,
                 text=[target_class],

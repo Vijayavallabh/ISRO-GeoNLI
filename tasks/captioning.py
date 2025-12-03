@@ -1,7 +1,9 @@
 """
 Image captioning task implementation.
 """
+import logging
 
+logger = logging.getLogger(__name__)
 
 class CaptioningTask:
     """Handles image captioning with generate-then-compress strategy."""

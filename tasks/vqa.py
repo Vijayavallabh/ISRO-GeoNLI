@@ -8,6 +8,10 @@ from collections import defaultdict
 from utils.visualization import annotate_image_with_boxes
 from model.tool_calling_step_wise import SatelliteVQAAgent
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 # --- ROUTER CONFIGURATION ---
 ROUTER_SYSTEM_PROMPT = """You are an intelligent routing system for remote sensing visual question answering tasks. Your job is to analyze questions and determine whether they require SAM3 (Segment Anything Model 3) segmentation capabilities or can be answered directly by a Vision Language Model (VLM).
@@ -62,7 +66,7 @@ class VQATask:
         self.agent = SatelliteVQAAgent(
             vlm_model=vlm_interface.model,
             vlm_processor=vlm_interface.processor,
-            sam_interface=self.sam3_interface
+            sam_interface=self.sam_interface
         )
     
     # --- Entry Points required by RS Pipeline ---
@@ -83,7 +87,7 @@ class VQATask:
 
     def route_question(self, question):
         """
-        Determines if a question needs SAM (metadata/grounding) or VLM (visual only).
+        Determines if a question needs SAM (grounding) or VLM (visual only).
         """
         messages = [
             {"role": "system", "content": ROUTER_SYSTEM_PROMPT},
@@ -126,7 +130,7 @@ class VQATask:
         Unified logic: Routes the question, then executes strategy respecting the question type.
         """
         route = self.route_question(query)
-        print(f"--- Router Decision: {route} for {q_type} query '{query}' ---")
+        logger.info(f"--- Router Decision: {route} for {q_type} query '{query}' ---")
         
         if route == "SAM":
             return self._answer_via_sam_path(image, query, gsd, q_type)
@@ -137,7 +141,7 @@ class VQATask:
 
     def _answer_via_sam_path(self, image, query, gsd, q_type):
         """
-        Handles 'SAM' questions: Uses the Tool-Calling Agent with metadata.
+        Handles 'SAM' questions: Uses the Tool-Calling Agent.
         """
         
         # Guide the Agent based on question type
@@ -147,12 +151,13 @@ class VQATask:
         elif q_type == "binary":
             type_instruction = "Answer this binary question with Yes or No."
         elif q_type == "semantic":
-            type_instruction = "Answer this descriptive question in detail."
+            type_instruction = "Provide the final answer for this question very briefly. Intermediate outputs may be detailed."
             
         augmented_query = f"{type_instruction} {query}"
         
         # Run the Multi-Step Tool Agent
-        response_dict = self.agent.run(image, augmented_query, metadata)
+
+        response_dict = self.agent.run(image, augmented_query)
         
         if "final_answer" in response_dict:
             return response_dict["final_answer"]

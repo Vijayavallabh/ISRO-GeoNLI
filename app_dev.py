@@ -30,6 +30,14 @@ from api_models import (
     SimpleRequest
 )
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,  # or DEBUG while developing
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    filename='app.log'
+)
+
 
 # ============================================================================
 # FastAPI App - Development Configuration

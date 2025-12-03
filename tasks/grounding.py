@@ -4,11 +4,14 @@ Object grounding task implementation.
 import re
 import cv2
 import numpy as np
-import tempfile
 import os
 import matplotlib.pyplot as plt
 from PIL import Image
-from utils.visualization import annotate_image_with_boxes
+
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class GroundingTask:
@@ -33,7 +36,7 @@ class GroundingTask:
             "Return ONLY the object type, nothing else."
         )
         
-        print(f"\n[Grounding] Stage 1: Target Extraction for '{query}'")
+        logger.info(f"\n[Grounding] Stage 1: Target Extraction for '{query}'")
         
         try:
             # Pass None for image to use text-only mode
@@ -48,7 +51,7 @@ class GroundingTask:
                 return target_class
                 
         except Exception as e:
-            print(f"   [Extraction Warning] {e}")
+            logger.exception(f"   [Extraction Warning] {e}")
             
         # Fallback heuristic if VLM fails
         words = query.lower().split()
@@ -145,7 +148,7 @@ class GroundingTask:
             return Image.fromarray(overlay)
             
         except Exception as e:
-            print(f"[Error] Failed to create annotated image: {e}")
+            logger.exception(f"[Error] Failed to create annotated image: {e}")
             return original_image
 
     def qwen_direct_localization(self, image, description):
@@ -167,11 +170,11 @@ class GroundingTask:
             f"Respond with ONLY the 4 numbers separated by spaces, nothing else."
         )
         
-        print("\n   [Fallback] SAM3 failed. Attempting Qwen Direct Localization...")
+        logger.debug("\n   [Fallback] SAM3 failed. Attempting Qwen Direct Localization...")
         
         # Pass actual image here
         response = self.vlm.query(image, prompt_text, max_tokens=50)
-        print(f"   [Fallback] Response: '{response}'")
+        logger.info(f"   [Fallback] Response: '{response}'")
         
         # Parse coordinates
         numbers = re.findall(r'-?\d+\.?\d*', response)
@@ -185,7 +188,7 @@ class GroundingTask:
             y_max = max(0, min(img_h, y_max))
             
             if x_max <= x_min or y_max <= y_min:
-                print("   [Fallback] Invalid box dimensions.")
+                logger.debug("   [Fallback] Invalid box dimensions.")
                 return None
                 
             # Convert to OBB (8 coords)
@@ -197,7 +200,7 @@ class GroundingTask:
             ]
             return obb
             
-        print("   [Fallback] Could not parse 4 coordinates.")
+        logger.debug("   [Fallback] Could not parse 4 coordinates.")
         return None
 
     def select_best_obb(self, image, description, candidate_obbs, sam_metadata, masks):
@@ -230,21 +233,21 @@ class GroundingTask:
             f"OUTPUT: Reply with ONLY the mask ID number (e.g., \"0\" or \"1\" or \"2\"). No explanation needed."
         )
         
-        print("\n   [Selection] Asking VLM to select best candidate...")
+        logger.info("\n   [Selection] Asking VLM to select best candidate...")
         # Pass annotated image here
         response = self.vlm.query(annotated_image, prompt_text, max_tokens=20)
-        print(f"   [Selection] Response: '{response}'")
+        logger.info(f"   [Selection] Response: '{response}'")
         
         # Parse ID
         matches = re.findall(r'\d+', response)
         if matches:
             selected_idx = int(matches[0])
             if 0 <= selected_idx < len(candidate_obbs):
-                print(f"   [Selection] Selected Mask ID: {selected_idx}")
+                logger.info(f"   [Selection] Selected Mask ID: {selected_idx}")
                 return candidate_obbs[selected_idx], selected_idx
         
         # Fallback: largest area
-        print("   [Selection] Parsing failed. Selecting largest mask.")
+        logger.debug("   [Selection] Parsing failed. Selecting largest mask.")
         areas = [meta['area'] for meta in sam_metadata]
         selected_idx = int(np.argmax(areas))
         return candidate_obbs[selected_idx], selected_idx
@@ -254,31 +257,23 @@ class GroundingTask:
         """
         Perform complete grounding pipeline: Extraction -> SAM3 -> Selection/Fallback.
         """
-        print(f"--- Task: Grounding (Query: '{query}') ---")
+        logger.info(f"--- Task: Grounding (Query: '{query}') ---")
         
         # --- Stage 1: Extract Target Class ---
         target_class = self.extract_target_class(query)
-        print(f"   [Extraction] Target Class: '{target_class}'")
+        logger.info(f"   [Extraction] Target Class: '{target_class}'")
         
         # --- Stage 2: SAM3 Segmentation ---
         sam_success = False
         masks = None
         sam_metadata_fallback = []
         candidate_obbs = []
-        
-        # Save PIL image to temp file for SAM3 interface
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-            image.save(tmp.name)
-            temp_path = tmp.name
-            
+
         try:
-            sam_results = self.sam3.segment_image(temp_path, target_class)
+            sam_results = self.sam3.segment_image(image, target_class)
         except Exception as e:
-            print(f"   [SAM3 Error] {e}")
+            logger.exception(f"   [SAM3 Error] {e}")
             sam_results = None
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
         
         if sam_results and sam_results.get("masks") is not None and len(sam_results["masks"]) > 0:
             masks = sam_results["masks"]
@@ -311,11 +306,11 @@ class GroundingTask:
                 candidate_obbs = valid_obbs
                 sam_metadata_fallback = reprocessed_metadata
                 masks = valid_masks
-                print(f"   [SAM3] Found {len(candidate_obbs)} candidate masks.")
+                logger.info(f"   [SAM3] Found {len(candidate_obbs)} candidate masks.")
             else:
-                print("   [SAM3] Found masks but failed to convert to OBBs.")
+                logger.info("   [SAM3] Found masks but failed to convert to OBBs.")
         else:
-            print("   [SAM3] No masks found.")
+            logger.info("   [SAM3] No masks found.")
 
         # --- Stage 3: Selection or Fallback ---
         final_obb = None

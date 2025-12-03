@@ -11,11 +11,13 @@ from utils.geo_calc import GeoCalculator
 from model.model_builder import build_vlm_model, build_sam3_model
 
 try:
-    from satellite_vqa_tools import comparison_tool, distance_tool, calculator_tool
+    from utils.satellite_vqa_tools import comparison_tool, distance_tool, calculator_tool
 except ImportError:
     print("Warning: satellite_vqa_tools.py not found. Tool execution will fail.")
 
+import logging
 
+logger = logging.getLogger(__name__)
 
 SATELLITE_TOOLS = [
     {
@@ -110,6 +112,8 @@ class SatelliteVQAAgent:
         }
         self.image = None
 
+        logger.info("Instantiating SatelliteVQAAgent")
+
 
     def _sam_tool_wrapper(self, target_class):
         """Wrapper so the tool API only needs target_class."""
@@ -141,7 +145,7 @@ class SatelliteVQAAgent:
         
         return prompt
 
-    def run(self, image: Image.Image, user_query: str, metadata: Dict, max_steps: int = 5):
+    def run(self, image: Image.Image, user_query: str, metadata: Dict = {}, max_steps: int = 5):
         """
         Executes the agent loop with Multi-Step capability (ReAct Loop).
         """
@@ -163,7 +167,7 @@ class SatelliteVQAAgent:
             }
         ]
 
-        print(f"--- Starting Agent Loop (Max Steps: {max_steps}) ---")
+        logger.info(f"--- Starting Agent Loop (Max Steps: {max_steps}) ---")
 
         for step in range(max_steps):
             # 2. Prepare Inputs (History -> Tensors)
@@ -189,7 +193,7 @@ class SatelliteVQAAgent:
                 generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
             )[0]
 
-            print(f"\n[Step {step+1} Model Output]: {output_text}")
+            logger.info(f"\n[Step {step+1} Model Output]: {output_text}")
 
             # 4. Check for Tool Call
             tool_result = self._parse_and_execute_tool(output_text)
@@ -209,12 +213,12 @@ class SatelliteVQAAgent:
                     "content": [{"type": "text", "text": observation_text}]
                 })
                 
-                print(f"[System]: {observation_text}")
+                logger.info(f"[System]: {observation_text}")
                 # Loop continues to next iteration (Step 2, 3...)
                 
             else:
                 # No tool call found -> This is the Final Answer
-                print("\n[Final Answer Reached]")
+                logger.info("\n[Final Answer Reached]")
                 return {
                     "final_answer": output_text,
                     "steps_taken": step + 1
@@ -243,7 +247,7 @@ class SatelliteVQAAgent:
                 else:
                     return None
         except Exception as e:
-            print(f"Failed to parse or execute tool: {e}")
+            logger.info(f"Failed to parse or execute tool: {e}")
             return None
         return None
 
