@@ -1,27 +1,36 @@
-# Core dependencies
+# Core ML dependencies
 torch>=2.6.0
 torchvision>=0.21.0
-transformers>=4.40.0
-accelerate>=0.30.0
 
-# VLM inference (transformers only, no vLLM)
-qwen-vl-utils
+# Transformers MUST be installed from source for Qwen3-VL/SAM3 support
+# The standard 'pip install transformers' does not yet have these classes.
+git+https://github.com/huggingface/transformers.git
+accelerate>=1.0.0
 
-# Computer vision
-opencv-python>=4.9.0
-pillow>=10.0.0
+# VLM Utilities
+qwen-vl-utils>=0.0.8
 
-# Scientific computing
-numpy>=1.24.0
+# Computer Vision & Image Processing
+opencv-python>=4.10.0
+pillow>=11.0.0
+imageio>=2.34.0
+shapely>=2.0.0      # Required by eval.py for Polygon operations
+
+# Scientific Computing
+numpy>=1.26.0
 
 # Visualization
-matplotlib>=3.7.0
-seaborn>=0.12.0
+matplotlib>=3.9.0
+seaborn>=0.13.0
+
+# Experiment Tracking & Config
+wandb>=0.17.0       # Required by eval.py
+python-dotenv>=1.0.0 # Required by eval.py
 
 # Utilities
-requests>=2.31.0
-tqdm>=4.65.0
+requests>=2.32.0
+tqdm>=4.66.0
 
-# Development (optional)
-jupyter>=1.0.0
-ipykernel>=6.25.0
+# Development
+jupyter>=1.1.0
+ipykernel>=6.29.0
