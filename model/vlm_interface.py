@@ -52,45 +52,43 @@ class VLMInterface:
         
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+
+        content = []
+        if image is not None:
+            image_uri = self._pil_to_data_uri(image)
+            content.append({"type": "image", "image": image_uri})
             
-        # Convert PIL image to data URI (same as notebook)
-        image_uri = self._pil_to_data_uri(image)
+        content.append({"type": "text", "text": prompt})
         
         messages.append({
             "role": "user",
-            "content": [
-                {"type": "image", "image": image_uri},
-                {"type": "text", "text": prompt},
-            ]
+            "content": content
         })
-        
-        # Prepare inputs using processor (same as notebook)
+
         text = self.processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
         
-        # Process vision info (same as notebook - needed for Qwen models)
-        image_inputs, video_inputs, video_kwargs = process_vision_info(
-            messages,
-            image_patch_size=self.processor.image_processor.patch_size,
-            return_video_kwargs=True,
-            return_video_metadata=True
-        )
+        image_inputs, video_inputs = process_vision_info(messages)
         
-        # For transformers, use the processor to prepare inputs
-        # The processor handles both text tokenization and image processing
-        inputs = self.processor(
-            text=[text],
-            images=[image],
-            padding=True,
-            return_tensors="pt"
-        )
+        processor_kwargs = {
+            "text": [text],
+            "padding": True,
+            "return_tensors": "pt"
+        
+        }
+        if image_inputs is not None:
+            processor_kwargs["images"] = image_inputs
+        if video_inputs is not None:
+            processor_kwargs["videos"] = video_inputs
+
+        inputs = self.processor(**processor_kwargs)
         
         # Move inputs to device
         inputs = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v 
                  for k, v in inputs.items()}
         
-        # Generate with same parameters as notebook (temperature=0, deterministic)
+
         generation_config = {
             "max_new_tokens": max_tokens,
             "do_sample": temperature > 0,
@@ -105,9 +103,8 @@ class VLMInterface:
                 **inputs,
                 **generation_config
             )
-        
-        # Decode the generated text
-        # Only decode the newly generated tokens (skip input tokens)
+
+
         input_length = inputs['input_ids'].shape[1]
         generated_ids = generated_ids[0, input_length:]
         
