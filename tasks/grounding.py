@@ -149,7 +149,10 @@ class GroundingTask:
             return original_image
 
     def qwen_direct_localization(self, image, description):
-        """Fallback: Use VLM to directly predict horizontal bounding box."""
+        """
+        Fallback: Use VLM to directly predict multiple horizontal bounding boxes.
+        Returns a list of obb (8 coords) or an empty list.
+        """
         img_w, img_h = image.size
         
         prompt_text = (
@@ -157,53 +160,69 @@ class GroundingTask:
             f"TARGET DESCRIPTION: \"{description}\"\n"
             f"IMAGE SIZE: {img_w}x{img_h} pixels\n"
             f"NOTE: Coordinate (0,0) is at the top-left corner of the image.\n\n"
-            f"TASK: Locate the object described above and provide a horizontal bounding box around it.\n"
-            f"OUTPUT FORMAT: Provide 4 numbers: x_min y_min x_max y_max (top-left and bottom-right corners)\n"
+            f"TASK: Locate ALL objects described above and provide horizontal bounding boxes for them.\n"
+            f"If you find multiple objects, list their coordinates one after another.\n"
+            f"If no object is found, return an empty string.\n"
+            f"OUTPUT FORMAT: Provide 4 numbers for EACH object: x_min y_min x_max y_max (top-left and bottom-right corners)\n"
             f"- x_min: left edge x-coordinate (0 to {img_w})\n"
             f"- y_min: top edge y-coordinate (0 to {img_h})\n"
             f"- x_max: right edge x-coordinate (0 to {img_w})\n"
             f"- y_max: bottom edge y-coordinate (0 to {img_h})\n\n"
-            f"Example output: \"150 200 300 350\"\n\n"
-            f"Respond with ONLY the 4 numbers separated by spaces, nothing else."
+            f"Example output for 2 objects: \"150 200 300 350 400 450 550 600\"\n\n"
+            f"Respond with ONLY the numbers separated by spaces, nothing else."
         )
         
-        print("\n   [Fallback] SAM3 failed. Attempting Qwen Direct Localization...")
+        print("\n    [Fallback] SAM3 failed. Attempting Qwen Direct Localization...")
         
         # Pass actual image here
-        response = self.vlm.query(image, prompt_text, max_tokens=50)
-        print(f"   [Fallback] Response: '{response}'")
+        response = self.vlm.query(image, prompt_text, max_tokens=100)
+        print(f"    [Fallback] Response: '{response}'")
         
         # Parse coordinates
         numbers = re.findall(r'-?\d+\.?\d*', response)
-        if len(numbers) >= 4:
-            x_min, y_min, x_max, y_max = [float(n) for n in numbers[:4]]
+        
+        # Must have a count divisible by 4
+        if len(numbers) < 4 or len(numbers) % 4 != 0:
+            print(f"    [Fallback] Could not parse a valid number of coordinates ({len(numbers)}).")
+            return []
             
-            # Clamp
-            x_min = max(0, min(img_w, x_min))
-            y_min = max(0, min(img_h, y_min))
-            x_max = max(0, min(img_w, x_max))
-            y_max = max(0, min(img_h, y_max))
-            
-            if x_max <= x_min or y_max <= y_min:
-                print("   [Fallback] Invalid box dimensions.")
-                return None
+        obbs = []
+        
+        for i in range(0, len(numbers), 4):
+            try:
+                x_min, y_min, x_max, y_max = [float(n) for n in numbers[i:i+4]]
                 
-            # Convert to OBB (8 coords)
-            obb = [
-                x_min, y_min,  # top-left
-                x_max, y_min,  # top-right
-                x_max, y_max,  # bottom-right
-                x_min, y_max   # bottom-left
-            ]
-            return obb
-            
-        print("   [Fallback] Could not parse 4 coordinates.")
-        return None
+                # Clamp and enforce x_min < x_max, y_min < y_max
+                x_min = max(0, min(img_w, x_min))
+                y_min = max(0, min(img_h, y_min))
+                x_max = max(0, min(img_w, x_max))
+                y_max = max(0, min(img_h, y_max))
 
-    def select_best_obb(self, image, description, candidate_obbs, sam_metadata, masks):
-        """Use VLM to select the best OBB from candidates using annotated image."""
+                if x_max <= x_min or y_max <= y_min:
+                    print(f"    [Fallback] Skipping invalid box dimensions: {x_min} {y_min} {x_max} {y_max}")
+                    continue
+                    
+                # Convert to OBB (8 coords)
+                obb = [
+                    x_min, y_min,  # top-left
+                    x_max, y_min,  # top-right
+                    x_max, y_max,  # bottom-right
+                    x_min, y_max   # bottom-left
+                ]
+                obbs.append(obb)
+            except ValueError:
+                print("    [Fallback] Error converting parsed string to float.")
+                continue
+                
+        return obbs    
+
+    def select_best_obbs(self, image, description, candidate_obbs, sam_metadata, masks):
+        """
+        Use VLM to select the best OBBs (plural) from candidates using annotated image.
+        Returns a tuple: (list of selected OBBs, list of selected indices).
+        """
         if not candidate_obbs:
-            return None, -1
+            return [], []
             
         # Create annotated image
         annotated_image = self.create_annotated_image(image, masks, sam_metadata)
@@ -217,6 +236,8 @@ class GroundingTask:
             for meta in sam_metadata
         ])
         
+        all_ids = [str(meta['mask_id']) for meta in sam_metadata]
+        
         prompt_text = (
             f"You are analyzing a remote sensing/aerial image for object localization.\n"
             f"TARGET DESCRIPTION: \"{description}\"\n"
@@ -225,40 +246,56 @@ class GroundingTask:
             f"NOTE: The image has a 10x10 grid overlay to help with spatial reference. "
             f"Vertical lines are MAGENTA, horizontal lines are CYAN.\n"
             f"NOTE: Coordinate (0,0) is at the top-left corner of the image.\n"
-            f"TASK: Identify which mask ID corresponds to the target object described above. "
-            f"You are allowed to take time to reason and output the desired answer. \n"
-            f"OUTPUT: Reply with ONLY the mask ID number (e.g., \"0\" or \"1\" or \"2\"). No explanation needed."
+            f"TASK: Identify ALL mask IDs that correspond to the target object(s) described above. "
+            f"If no mask corresponds, return an empty string.\n"
+            f"OUTPUT: Reply with ONLY the mask ID numbers (e.g., \"0 3 5 8\"). Use spaces to separate IDs. No explanation needed."
         )
         
-        print("\n   [Selection] Asking VLM to select best candidate...")
+        print("\n    [Selection] Asking VLM to select best candidates...")
         # Pass annotated image here
-        response = self.vlm.query(annotated_image, prompt_text, max_tokens=20)
-        print(f"   [Selection] Response: '{response}'")
+        response = self.vlm.query(annotated_image, prompt_text, max_tokens=50)
+        print(f"    [Selection] Response: '{response}'")
         
-        # Parse ID
+        # Parse IDs
         matches = re.findall(r'\d+', response)
-        if matches:
-            selected_idx = int(matches[0])
-            if 0 <= selected_idx < len(candidate_obbs):
-                print(f"   [Selection] Selected Mask ID: {selected_idx}")
-                return candidate_obbs[selected_idx], selected_idx
         
-        # Fallback: largest area
-        print("   [Selection] Parsing failed. Selecting largest mask.")
-        areas = [meta['area'] for meta in sam_metadata]
-        selected_idx = int(np.argmax(areas))
-        return candidate_obbs[selected_idx], selected_idx
+        selected_indices = []
+        selected_obbs = []
+        
+        for match in matches:
+            try:
+                selected_idx = int(match)
+                if 0 <= selected_idx < len(candidate_obbs):
+                    if selected_idx not in selected_indices: # Ensure uniqueness
+                        selected_indices.append(selected_idx)
+                        selected_obbs.append(candidate_obbs[selected_idx])
+            except ValueError:
+                continue
+                
+        if selected_obbs:
+            print(f"    [Selection] Selected Mask IDs: {selected_indices}")
+            return selected_obbs, selected_indices
+            
+        # Fallback: largest area (if VLM fails to select any)
+        print("    [Selection] Parsing failed or VLM selected none. Falling back to largest mask if multiple exist.")
+        if candidate_obbs:
+            areas = [meta['area'] for meta in sam_metadata]
+            selected_idx = int(np.argmax(areas))
+            return [candidate_obbs[selected_idx]], [selected_idx]
+            
+        return [], []
 
     
     def ground_objects(self, image, query, show_visualization=True):
         """
         Perform complete grounding pipeline: Extraction -> SAM3 -> Selection/Fallback.
+        Returns a list of object results formatted as [{"object-id": "1", "obbox": [...]}, ...].
         """
         print(f"--- Task: Grounding (Query: '{query}') ---")
         
         # --- Stage 1: Extract Target Class ---
         target_class = self.extract_target_class(query)
-        print(f"   [Extraction] Target Class: '{target_class}'")
+        print(f"    [Extraction] Target Class: '{target_class}'")
         
         # --- Stage 2: SAM3 Segmentation ---
         sam_success = False
@@ -274,7 +311,7 @@ class GroundingTask:
         try:
             sam_results = self.sam3.segment_image(temp_path, target_class)
         except Exception as e:
-            print(f"   [SAM3 Error] {e}")
+            print(f"    [SAM3 Error] {e}")
             sam_results = None
         finally:
             if os.path.exists(temp_path):
@@ -283,7 +320,7 @@ class GroundingTask:
         if sam_results and sam_results.get("masks") is not None and len(sam_results["masks"]) > 0:
             masks = sam_results["masks"]
             
-            # Re-process masks to get reliable OBBs (8 coords) and Areas like the notebook
+            # Re-process masks to get reliable OBBs (8 coords) and Areas
             reprocessed_metadata = []
             valid_obbs = []
             valid_masks = []
@@ -311,87 +348,116 @@ class GroundingTask:
                 candidate_obbs = valid_obbs
                 sam_metadata_fallback = reprocessed_metadata
                 masks = valid_masks
-                print(f"   [SAM3] Found {len(candidate_obbs)} candidate masks.")
+                print(f"    [SAM3] Found {len(candidate_obbs)} candidate masks.")
             else:
-                print("   [SAM3] Found masks but failed to convert to OBBs.")
+                print("    [SAM3] Found masks but failed to convert to OBBs.")
         else:
-            print("   [SAM3] No masks found.")
+            print("    [SAM3] No masks found.")
 
         # --- Stage 3: Selection or Fallback ---
-        final_obb = None
-        selected_idx = -1
-        method = "sam3_qwen_select"
+        final_obbs = []
+        selected_indices = []
+        method = ""
         
         if not sam_success:
-            # Fallback: Qwen Direct
-            final_obb = self.qwen_direct_localization(image, query)
+            # Fallback: Qwen Direct (returns list of OBBs)
+            final_obbs = self.qwen_direct_localization(image, query)
             method = "qwen_direct"
-            if final_obb:
-                sam_metadata_fallback = [{
-                    "mask_id": -1,
-                    "obb": final_obb,
-                    "confidence": 0.0,
-                    "area": 0.0,
-                    "method": "qwen_direct"
-                }]
-                selected_idx = -1
+            if final_obbs:
+                print(f"    [Qwen Direct] Found {len(final_obbs)} objects.")
         else:
-            # Selection: Qwen Select
-            final_obb, selected_idx = self.select_best_obb(
+            # Selection: Qwen Select (returns list of OBBs and indices)
+            final_obbs, selected_indices = self.select_best_obbs(
                 image, query, candidate_obbs, sam_metadata_fallback, masks
             )
+            method = "sam3_qwen_select"
             
         # Format result
-        if final_obb:
-            result = {
-                "id": 1,
+        results = []
+        for i, obb in enumerate(final_obbs):
+            # If SAM was used, use the specific metadata for the selected index
+            if method == "sam3_qwen_select" and selected_indices:
+                # Find metadata corresponding to the current OBB's index
+                meta = next((m for m in sam_metadata_fallback if m['mask_id'] == selected_indices[i]), None)
+                score = meta.get("confidence", 1.0) if meta else 1.0
+                full_metadata = meta
+                
+            # If Qwen Direct was used
+            elif method == "qwen_direct":
+                # Create minimal metadata for Qwen direct output
+                score = 1.0
+                full_metadata = {
+                    "method": "qwen_direct",
+                    "obb": obb,
+                    "confidence": 1.0,
+                    "area": 0.0, # Cannot compute area easily here
+                    "mask_id": i + 1
+                }
+            else:
+                score = 1.0
+                full_metadata = {"method": "unknown"}
+
+            results.append({
+                "object-id": str(i + 1), # 1-based indexing for output
                 "description": query,
                 "target_class": target_class,
-                "obb": final_obb, # 8 coords
-                "score": 1.0, 
-                "metadata": sam_metadata_fallback,
-                "selected_index": selected_idx,
+                "obbox": obb, # 8 coords
+                "score": score,  
+                "metadata": full_metadata,
                 "method": method
-            }
-            results = [result]
-        else:
-            results = []
+            })
             
         # Visualization
         if show_visualization and results:
-            pred_obb = results[0]['obb']
-            
             # Prepare image for plotting
             vis_img = np.array(image)
             
             plt.figure(figsize=(10, 10))
             plt.imshow(vis_img)
             
-            # Draw Prediction (Green)
-            if pred_obb:
+            # Draw Predictions (Green)
+            for result in results:
+                pred_obb = result['obbox']
+                obj_id = result['object-id']
+                
                 pts = np.array(pred_obb).reshape(-1, 2)
                 # Close the loop
                 pts = np.vstack((pts, pts[0]))
-                plt.plot(pts[:, 0], pts[:, 1], 'g-', linewidth=3, label='Prediction')
+                plt.plot(pts[:, 0], pts[:, 1], 'g-', linewidth=3, label=f'Prediction {obj_id}')
                 
                 # Add label
                 cx = np.mean(pts[:, 0])
                 cy = np.mean(pts[:, 1])
-                plt.text(cx, cy, "PRED", color='white', fontsize=12, 
+                plt.text(cx, cy, f"P:{obj_id}", color='white', fontsize=12, 
                          bbox=dict(facecolor='green', alpha=0.5))
             
-            # If we have candidates (SAM succeeded), plot them faintly
-            if sam_success:
+            # If SAM succeeded, plot non-selected candidates faintly
+            if sam_success and method == "sam3_qwen_select":
                 for meta in sam_metadata_fallback:
-                    if meta['mask_id'] == selected_idx: continue
-                    c_obb = meta['obb']
-                    pts = np.array(c_obb).reshape(-1, 2)
-                    pts = np.vstack((pts, pts[0]))
-                    plt.plot(pts[:, 0], pts[:, 1], 'y--', linewidth=1, alpha=0.7)
-                    
-            plt.title(f"Result: {query}\nMethod: {method}")
+                    if meta['mask_id'] not in selected_indices:
+                        c_obb = meta['obb']
+                        pts = np.array(c_obb).reshape(-1, 2)
+                        pts = np.vstack((pts, pts[0]))
+                        plt.plot(pts[:, 0], pts[:, 1], 'y--', linewidth=1, alpha=0.7)
+                        # Add mask ID
+                        cx = np.mean(pts[:, 0])
+                        cy = np.mean(pts[:, 1])
+                        plt.text(cx, cy, str(meta['mask_id']), color='black', fontsize=8,
+                                 bbox=dict(facecolor='yellow', alpha=0.4))
+                        
+            plt.title(f"Result: {query}\nMethod: {method} ({len(results)} object(s) found)")
             plt.axis('off')
-            plt.legend()
+            
+            # Create a simple legend for the visualization to clarify colors
+            from matplotlib.lines import Line2D
+            custom_lines = [Line2D([0], [0], color='g', lw=3),
+                            Line2D([0], [0], color='y', linestyle='--', lw=1)]
+            plt.legend(custom_lines, ['Final Bounding Box(es)', 'Unselected Candidate(s)'], loc='upper right')
+            
             plt.show()
             
-        return results
+        # Final output structure matches the request
+        return [{
+            "object-id": r["object-id"],
+            "obbox": r["obbox"]
+        } for r in results]
