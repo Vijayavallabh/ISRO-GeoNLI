@@ -147,7 +147,7 @@ class VQATask:
         if route == "SAM":
             return self._answer_via_sam_path(image, query, gsd, q_type)
         else:
-            return self._answer_via_vlm_path(image, query, q_type)
+            return self._answer_via_vlm_path(image, query, gsd, q_type)
 
     # --- Solvers ---
 
@@ -165,7 +165,7 @@ class VQATask:
         elif q_type == "semantic":
             type_instruction = "Provide the final answer for this question very briefly. Intermediate outputs may be detailed."
             
-        augmented_query = f"{type_instruction} {query}"
+        augmented_query = f"{type_instruction}. The ground sampling distance is {gsd} m/pixel. {query}"
         
         # Run the Multi-Step Tool Agent
 
@@ -176,13 +176,13 @@ class VQATask:
         else:
             return f"Error: {response_dict.get('error', 'Agent failed to answer.')}"
 
-    def _answer_via_vlm_path(self, image, query, q_type):
+    def _answer_via_vlm_path(self, image, query, gsd, q_type):
         """
         Handles 'VLM' questions: Direct visual understanding with specialized prompts.
         """
         
         visual_input = image
-        visual_note = ""
+        visual_note = f"The ground sampling distance is {gsd} m/pixel"
 
         # Select System Prompt based on Question Type
         if q_type == "numeric":
