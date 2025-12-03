@@ -7,7 +7,7 @@ from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 from transformers import Sam3Model, Sam3Processor
 from qwen_vl_utils import process_vision_info
 from utils.geo_calc import GeoCalculator 
-from model.sam3_interface import SAM3Interface
+
 from model.model_builder import build_vlm_model, build_sam3_model
 
 try:
@@ -82,16 +82,16 @@ SATELLITE_TOOLS = [
     },
     {
         "name": "SAM_tool",
-        "description": "Uses SAM3 to detect objects in the image. Takes in a noun phrase as an input and returns mask id, oriented bounding box, confidence, and area of the object for each instance of the object in the image.",
+        "description": "Uses SAM3 to detect objects in the image. Takes in a noun phrase as an input in the target_class argument and returns mask id, oriented bounding box, confidence, and area of the object for each instance of the object in the image.",
         "parameters": {
             "type": "object",
             "properties": {
-                "noun_phrase": {
+                "target_class": {
                     "type": "string",
-                    "description": "The noun phrase to use as a text prompt for SAM3."
+                    "description": "The target class to use as a text prompt for SAM3."
                 }
             },
-            "required": ["noun_phrase"]
+            "required": ["target_class"]
         }
     }
 ]
@@ -106,8 +106,14 @@ class SatelliteVQAAgent:
             "comparison_tool": comparison_tool,
             "distance_tool": distance_tool,
             "calculator_tool": calculator_tool,
-            "SAM_tool": sam_interface.segment_image
+            "SAM_tool": self._sam_tool_wrapper
         }
+        self.image = None
+
+
+    def _sam_tool_wrapper(self, target_class):
+        """Wrapper so the tool API only needs target_class."""
+        return self.sam.segment_image(self.image, target_class)
 
     def _format_system_prompt(self, metadata: Dict):
         """
@@ -139,7 +145,7 @@ class SatelliteVQAAgent:
         """
         Executes the agent loop with Multi-Step capability (ReAct Loop).
         """
-        
+        self.image = image
         system_prompt_text = self._format_system_prompt(metadata)
         
         # 1. Initialize History

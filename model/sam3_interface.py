@@ -14,12 +14,10 @@ class SAM3Interface:
         self.device = device
         self.geo_calc = GeoCalculator(spatial_resolution_m=spatial_resolution_m)
 
-    def segment_image(self, image_path, target_class):
-        try:
-            original_image = Image.open(image_path).convert("RGB")
-
+    def segment_image(self, image: Image.Image, target_class):
+        try
             inputs = self.processor(
-                images=original_image,
+                images=image,
                 text=[target_class],
                 return_tensors="pt"
             ).to(self.device)
@@ -27,7 +25,7 @@ class SAM3Interface:
             with torch.no_grad():
                 outputs = self.model(**inputs)
             
-            img_h, img_w = original_image.size[1], original_image.size[0]
+            img_h, img_w = image.size[1], image.size[0]
             results = self.processor.post_process_instance_segmentation(
                 outputs,
                 threshold=0.3,

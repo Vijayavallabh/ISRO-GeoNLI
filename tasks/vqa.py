@@ -48,7 +48,7 @@ Respond with ONLY a single word:
 class VQATask:
     """Handles various types of VQA tasks using a Router-based approach."""
     
-    def __init__(self, vlm_interface, grounding_task):
+    def __init__(self, vlm_interface, grounding_task, sam_interface):
         """
         Args:
             vlm_interface: VLMInterface instance
@@ -56,27 +56,28 @@ class VQATask:
         """
         self.vlm = vlm_interface
         self.grounding = grounding_task
+        self.sam_interface = sam_interface
         
         # Initialize the Tool-Calling Agent for SAM-routed tasks
         self.agent = SatelliteVQAAgent(
             vlm_model=vlm_interface.model,
             vlm_processor=vlm_interface.processor,
-            sam_interface=None 
+            sam_interface=self.sam3_interface
         )
     
     # --- Entry Points required by RS Pipeline ---
 
-    def answer_numeric_question(self, image, query, detections, gsd=1.0):
+    def answer_numeric_question(self, image, query, gsd=1.0):
         """Entry point for numeric questions."""
-        return self._answer_integrated(image, query, detections, gsd, "numeric")
+        return self._answer_integrated(image, query, gsd, "numeric")
 
-    def answer_binary_question(self, image, query, detections, gsd=1.0):
+    def answer_binary_question(self, image, query, gsd=1.0):
         """Entry point for binary questions."""
-        return self._answer_integrated(image, query, detections, gsd, "binary")
+        return self._answer_integrated(image, query, gsd, "binary")
 
-    def answer_semantic_question(self, image, query, detections, gsd=1.0):
+    def answer_semantic_question(self, image, query, gsd=1.0):
         """Entry point for semantic/descriptive questions."""
-        return self._answer_integrated(image, query, detections, gsd, "semantic")
+        return self._answer_integrated(image, query, gsd, "semantic")
 
     # --- Core Routing Logic ---
 
@@ -120,7 +121,7 @@ class VQATask:
         route = output_text.strip().upper()
         return "SAM" if "SAM" in route else "VLM"
 
-    def _answer_integrated(self, image, query, detections, gsd, q_type):
+    def _answer_integrated(self, image, query, gsd, q_type):
         """
         Unified logic: Routes the question, then executes strategy respecting the question type.
         """
@@ -128,18 +129,16 @@ class VQATask:
         print(f"--- Router Decision: {route} for {q_type} query '{query}' ---")
         
         if route == "SAM":
-            return self._answer_via_sam_path(image, query, detections, gsd, q_type)
+            return self._answer_via_sam_path(image, query, gsd, q_type)
         else:
-            return self._answer_via_vlm_path(image, query, detections, q_type)
+            return self._answer_via_vlm_path(image, query, q_type)
 
     # --- Solvers ---
 
-    def _answer_via_sam_path(self, image, query, detections, gsd, q_type):
+    def _answer_via_sam_path(self, image, query, gsd, q_type):
         """
         Handles 'SAM' questions: Uses the Tool-Calling Agent with metadata.
         """
-        # Prepare Metadata
-        metadata = self._detections_to_metadata(detections)
         
         # Guide the Agent based on question type
         type_instruction = ""
@@ -160,18 +159,13 @@ class VQATask:
         else:
             return f"Error: {response_dict.get('error', 'Agent failed to answer.')}"
 
-    def _answer_via_vlm_path(self, image, query, detections, q_type):
+    def _answer_via_vlm_path(self, image, query, q_type):
         """
         Handles 'VLM' questions: Direct visual understanding with specialized prompts.
         """
-        # Visual context from existing detections (if any)
-        if detections:
-            all_obbs = [d['obb'] for d in detections]
-            visual_input, _ = annotate_image_with_boxes(image, all_obbs)
-            visual_note = "The image contains annotated objects."
-        else:
-            visual_input = image
-            visual_note = ""
+        
+        visual_input = image
+        visual_note = ""
 
         # Select System Prompt based on Question Type
         if q_type == "numeric":
@@ -189,8 +183,10 @@ class VQATask:
             )
         else: # semantic
             sys_prompt = (
-                "You are a helpful remote sensing assistant. "
-                "Describe the visual content or answer the question in detail."
+                "You are a remote sensing agent. Answer the question in the following format"
+                "{{thoughts: str, answer: str}}"
+                "In thoughts understand the question, look for the answer based on the provided image and finally recheck."
+                "In answer provide your final answer very briefly."
             )
         
         user_prompt = f"Question: '{query}'"
@@ -198,35 +194,3 @@ class VQATask:
             user_prompt = f"Context: {visual_note}\n{user_prompt}"
 
         return self.vlm.query(visual_input, user_prompt, system_prompt=sys_prompt, max_tokens=128)
-    
-    # --- Helpers ---
-
-    def _detections_to_metadata(self, detections):
-        """
-        Converts the detection list into the JSON metadata format expected by the Agent.
-        """
-        if not detections:
-            return {"objects": [], "note": "No objects provided in input."}
-            
-        objects_meta = []
-        for d in detections:
-            cx, cy = d.get('center_point', (0, 0))
-            obj_entry = {
-                "id": d.get('id', 'unknown'),
-                "class": d.get('label', 'object'),
-                "area": d.get('area_m2', 0),
-                "center": [int(cx), int(cy)],
-                "confidence": d.get('score', 0.0)
-            }
-            if 'obb' in d:
-                obj_entry["obb_coords"] = d['obb']
-            if 'box' in d:
-                obj_entry["box_coords"] = d['box']
-                
-            objects_meta.append(obj_entry)
-            
-        return {
-            "objects": objects_meta, 
-            "count": len(objects_meta),
-            "note": "Metadata derived from provided detections."
-        }
