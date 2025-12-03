@@ -3,14 +3,52 @@ Visual Question Answering task implementations.
 """
 
 import re
+import torch
 from collections import defaultdict
 from utils.visualization import annotate_image_with_boxes
+from model.tool_calling_step_wise import SatelliteVQAAgent
 
+
+# --- ROUTER CONFIGURATION ---
+ROUTER_SYSTEM_PROMPT = """You are an intelligent routing system for remote sensing visual question answering tasks. Your job is to analyze questions and determine whether they require SAM3 (Segment Anything Model 3) segmentation capabilities or can be answered directly by a Vision Language Model (VLM).
+
+## SAM3 Capabilities
+SAM3 is a foundation model for promptable segmentation that can:
+- Detect and segment ALL instances of objects specified by text prompts (e.g., "buildings", "trees", "vehicles")
+- Generate precise pixel-level segmentation masks for multiple object instances
+- Provide bounding boxes and confidence scores for detected objects
+- Return masks that enable precise geometric calculations (area, perimeter, length, orientation)
+
+## When to Route to SAM3
+Route to SAM3 when the question requires:
+1. **Counting/Quantification**: "how many", "number of", "count", "amount of"
+2. **Area/Coverage Calculations**: "area covered", "percentage of coverage", "spatial extent"
+3. **Length/Distance Measurements**: "length", "width", "perimeter", "distance"
+4. **Orientation/Angle Analysis**: "direction", "orientation", "angle"
+5. **Density/Concentration**: "density", "distribution"
+6. **Ratio/Proportion Comparisons**: "ratio of", "more X than Y"
+7. **Spatial Relationships Requiring Segmentation**: "adjacent to", "overlap", "precise arrangement"
+8. **Size/Dimension Analysis**: "size of", "how wide"
+
+## When to Route to VLM
+Route to VLM when the question can be answered through visual understanding alone:
+1. **Object Existence/Presence**: "Is a X present?", "Are there any X?"
+2. **Visual Attributes**: "color", "texture", "appearance"
+3. **Object Recognition/Classification**: "What type of...", "Is this urban/rural?"
+4. **Scene Understanding**: "weather", "time of day", "context"
+5. **Qualitative Descriptions**: "Describe the landscape"
+6. **Approximate Comparisons**: "more trees than buildings" (visual estimate)
+
+## Output Format
+Respond with ONLY a single word:
+- "SAM" - if the question requires SAM3 segmentation
+- "VLM" - if the question can be answered by VLM alone
+"""
 
 class VQATask:
-    """Handles various types of VQA tasks."""
+    """Handles various types of VQA tasks using a Router-based approach."""
     
-    def __init__(self, vlm_interface, grounding_task):
+    def __init__(self, vlm_interface, grounding_task, sam_interface):
         """
         Args:
             vlm_interface: VLMInterface instance
@@ -18,175 +56,141 @@ class VQATask:
         """
         self.vlm = vlm_interface
         self.grounding = grounding_task
-    
-    def answer_numeric_question(self, image, query, detections, gsd=1.0):
-        """
-        Answer numeric questions (counting, area, distance).
+        self.sam_interface = sam_interface
         
-        Args:
-            image: PIL Image
-            query: Question string
-            detections: List of existing detections
-            gsd: Ground Sample Distance
+        # Initialize the Tool-Calling Agent for SAM-routed tasks
+        self.agent = SatelliteVQAAgent(
+            vlm_model=vlm_interface.model,
+            vlm_processor=vlm_interface.processor,
+            sam_interface=self.sam3_interface
+        )
+    
+    # --- Entry Points required by RS Pipeline ---
+
+    def answer_numeric_question(self, image, query, gsd=1.0):
+        """Entry point for numeric questions."""
+        return self._answer_integrated(image, query, gsd, "numeric")
+
+    def answer_binary_question(self, image, query, gsd=1.0):
+        """Entry point for binary questions."""
+        return self._answer_integrated(image, query, gsd, "binary")
+
+    def answer_semantic_question(self, image, query, gsd=1.0):
+        """Entry point for semantic/descriptive questions."""
+        return self._answer_integrated(image, query, gsd, "semantic")
+
+    # --- Core Routing Logic ---
+
+    def route_question(self, question):
+        """
+        Determines if a question needs SAM (metadata/grounding) or VLM (visual only).
+        """
+        messages = [
+            {"role": "system", "content": ROUTER_SYSTEM_PROMPT},
+            {"role": "user", "content": f"Question: {question}\nAnswer:"}
+        ]
+        
+        text = self.vlm.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        
+        inputs = self.vlm.processor(
+            text=[text],
+            padding=True,
+            return_tensors="pt",
+        ).to(self.vlm.device)
+        
+        with torch.no_grad():
+            generated_ids = self.vlm.model.generate(
+                **inputs,
+                max_new_tokens=10,
+                temperature=0.1,
+                do_sample=False,
+            )
             
-        Returns:
-            Numeric answer as string
+        generated_ids_trimmed = [
+            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+        ]
+        
+        output_text = self.vlm.processor.batch_decode(
+            generated_ids_trimmed, 
+            skip_special_tokens=True, 
+            clean_up_tokenization_spaces=False
+        )[0]
+        
+        route = output_text.strip().upper()
+        return "SAM" if "SAM" in route else "VLM"
+
+    def _answer_integrated(self, image, query, gsd, q_type):
         """
-        print(f"--- Task: Numeric VQA ('{query}') ---")
-        
-        # Ensure we have necessary detections
-        detections = self._ensure_detections(image, query, detections, gsd)
-        
-        # Prepare context
-        context_str = self._format_detection_context(detections)
-        
-        # Define strict system behavior
-        sys_prompt = (
-            "You are a helpful AI assistant acting as a calculator. "
-            "You will be provided with a list of detected objects and their metadata "
-            "(Area, Coordinates). "
-            "Your goal is to answer the user's numeric question using ONLY this metadata. "
-            "Perform the calculation internally and output ONLY the final number. "
-            "Do not output units, equations, or sentences."
-        )
-        
-        user_prompt = (
-            f"Metadata Context:\n{context_str}\n\n"
-            f"Question: '{query}'\n"
-            "Answer:"
-        )
-        
-        answer = self.vlm.query(image, user_prompt, 
-                               system_prompt=sys_prompt, max_tokens=32)
-        
-        # Clean up any lingering text
-        cleaned_answer = re.sub(r"[^\d\.]", "", answer)
-        return cleaned_answer
-    
-    def answer_binary_question(self, image, query, detections, gsd=1.0):
+        Unified logic: Routes the question, then executes strategy respecting the question type.
         """
-        Answer binary yes/no questions.
+        route = self.route_question(query)
+        print(f"--- Router Decision: {route} for {q_type} query '{query}' ---")
         
-        Args:
-            image: PIL Image
-            query: Question string
-            detections: List of existing detections
-            gsd: Ground Sample Distance
-            
-        Returns:
-            'Yes' or 'No'
-        """
-        return self._answer_general_vqa(
-            image, query, detections, gsd, 
-            question_type="binary"
-        )
-    
-    def answer_semantic_question(self, image, query, detections, gsd=1.0):
-        """
-        Answer semantic questions (color, material, activity).
-        
-        Args:
-            image: PIL Image
-            query: Question string
-            detections: List of existing detections
-            gsd: Ground Sample Distance
-            
-        Returns:
-            Short text answer
-        """
-        return self._answer_general_vqa(
-            image, query, detections, gsd,
-            question_type="semantic"
-        )
-    
-    def _answer_general_vqa(self, image, query, detections, gsd, question_type):
-        """Internal method for binary/semantic VQA."""
-        print(f"--- Task: {question_type.capitalize()} VQA ('{query}') ---")
-        
-        # Ensure detections
-        detections = self._ensure_detections(image, query, detections, gsd)
-        
-        # Prepare visuals
-        target_keywords = self.grounding.extract_target_classes(image, query)
-        relevant_obbs = [d['obb'] for d in detections 
-                        if d['label'] in target_keywords]
-        
-        if relevant_obbs:
-            visual_input, _ = annotate_image_with_boxes(image, relevant_obbs)
-            visual_note = ("The image has been annotated with RED BOXES and IDs "
-                          "to help you locate the objects.")
+        if route == "SAM":
+            return self._answer_via_sam_path(image, query, gsd, q_type)
         else:
-            all_obbs = [d['obb'] for d in detections]
-            if all_obbs:
-                visual_input, _ = annotate_image_with_boxes(image, all_obbs)
-                visual_note = "The image is annotated with all detected objects."
-            else:
-                visual_input = image
-                visual_note = "No specific objects were detected in the metadata."
+            return self._answer_via_vlm_path(image, query, q_type)
+
+    # --- Solvers ---
+
+    def _answer_via_sam_path(self, image, query, gsd, q_type):
+        """
+        Handles 'SAM' questions: Uses the Tool-Calling Agent with metadata.
+        """
         
-        # Define system behavior
-        if question_type == "binary":
-            sys_prompt = ("You are a strict answering machine. "
-                         "Answer the question with 'Yes' or 'No' ONLY.")
+        # Guide the Agent based on question type
+        type_instruction = ""
+        if q_type == "numeric":
+            type_instruction = "Answer this numeric question. Return a single number if possible."
+        elif q_type == "binary":
+            type_instruction = "Answer this binary question with Yes or No."
+        elif q_type == "semantic":
+            type_instruction = "Answer this descriptive question in detail."
+            
+        augmented_query = f"{type_instruction} {query}"
+        
+        # Run the Multi-Step Tool Agent
+        response_dict = self.agent.run(image, augmented_query, metadata)
+        
+        if "final_answer" in response_dict:
+            return response_dict["final_answer"]
         else:
-            sys_prompt = ("You are a concise assistant. "
-                         "Answer the question with a single word or short phrase.")
+            return f"Error: {response_dict.get('error', 'Agent failed to answer.')}"
+
+    def _answer_via_vlm_path(self, image, query, q_type):
+        """
+        Handles 'VLM' questions: Direct visual understanding with specialized prompts.
+        """
         
-        context_str = self._format_detection_context(detections)
+        visual_input = image
+        visual_note = ""
+
+        # Select System Prompt based on Question Type
+        if q_type == "numeric":
+            sys_prompt = (
+                "You are a remote sensing assistant. "
+                "The user asks a numeric question. "
+                "Count or estimate the quantity based on the visual image. "
+                "Provide the number clearly."
+            )
+        elif q_type == "binary":
+            sys_prompt = (
+                "You are a remote sensing assistant. "
+                "The user asks a binary (Yes/No) question. "
+                "Analyze the image and answer with ONLY 'Yes' or 'No'."
+            )
+        else: # semantic
+            sys_prompt = (
+                "You are a remote sensing agent. Answer the question in the following format"
+                "{{thoughts: str, answer: str}}"
+                "In thoughts understand the question, look for the answer based on the provided image and finally recheck."
+                "In answer provide your final answer very briefly."
+            )
         
-        user_prompt = (
-            f"Metadata Context:\n{context_str}\n\n"
-            f"Visual Context: {visual_note}\n"
-            f"Question: '{query}'"
-        )
-        
-        return self.vlm.query(visual_input, user_prompt, 
-                             system_prompt=sys_prompt, max_tokens=32)
-    
-    def _ensure_detections(self, image, query, current_detections, gsd):
-        """Dynamically ground missing objects if needed."""
-        needed_targets = self.grounding.extract_target_classes(image, query)
-        existing_labels = {d['label'] for d in current_detections}
-        missing_targets = [t for t in needed_targets if t not in existing_labels]
-        
-        if not missing_targets:
-            return current_detections
-        
-        print(f"   [Dynamic Grounding] VQA needs {missing_targets}. Scanning...")
-        new_detections = self.grounding.ground_objects(
-            image, query, gsd=gsd, 
-            forced_targets=missing_targets,
-            show_visualization=False
-        )
-        
-        return current_detections + new_detections
-    
-    def _format_detection_context(self, detections):
-        """Format detection metadata as text context."""
-        if not detections:
-            return "No objects were detected in the grounding phase."
-        
-        grouped = defaultdict(list)
-        for det in detections:
-            grouped[det['label']].append(det)
-        
-        lines = ["Grounding Phase Results:"]
-        
-        summary_parts = []
-        for label, dets in grouped.items():
-            summary_parts.append(f"{len(dets)} {label}(s)")
-        lines.append("Summary: Found " + ", ".join(summary_parts) + ".")
-        lines.append("-" * 30)
-        
-        for label, dets in grouped.items():
-            lines.append(f"Category: '{label}'")
-            for det in dets:
-                cx, cy = det['center_point']
-                lines.append(
-                    f"  - ID {det['id']}: "
-                    f"Area={det['area_m2']:.2f}m2, "
-                    f"Center=({int(cx)}, {int(cy)}), "
-                    f"Angle={det['obb'][2]:.1f}"
-                )
-        
-        return "\n".join(lines)
+        user_prompt = f"Question: '{query}'"
+        if visual_note:
+            user_prompt = f"Context: {visual_note}\n{user_prompt}"
+
+        return self.vlm.query(visual_input, user_prompt, system_prompt=sys_prompt, max_tokens=128)

@@ -7,7 +7,7 @@ from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 from transformers import Sam3Model, Sam3Processor
 from qwen_vl_utils import process_vision_info
 from utils.geo_calc import GeoCalculator 
-from model.sam3_interface import SAM3Interface
+
 from model.model_builder import build_vlm_model, build_sam3_model
 
 try:
@@ -79,22 +79,41 @@ SATELLITE_TOOLS = [
             },
             "required": ["expression"]
         }
+    },
+    {
+        "name": "SAM_tool",
+        "description": "Uses SAM3 to detect objects in the image. Takes in a noun phrase as an input in the target_class argument and returns mask id, oriented bounding box, confidence, and area of the object for each instance of the object in the image.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target_class": {
+                    "type": "string",
+                    "description": "The target class to use as a text prompt for SAM3."
+                }
+            },
+            "required": ["target_class"]
+        }
     }
 ]
 
-TOOL_MAP = {
-    "comparison_tool": comparison_tool,
-    "distance_tool": distance_tool,
-    "calculator_tool": calculator_tool
-}
-
-
 class SatelliteVQAAgent:
     def __init__(self, vlm_model, vlm_processor, sam_interface=None):
-        self.model = vlm_model
-        self.processor = vlm_processor
-        self.sam = sam_interface
+        self.model = vlm_model # vlm_model has been instantiated in rs_pipeline.py
+        self.processor = vlm_processor # vlm_processor has been instantiated in rs_pipeline.py
+        self.sam = sam_interface 
         self.tools_schema = SATELLITE_TOOLS
+        self.tool_map = {
+            "comparison_tool": comparison_tool,
+            "distance_tool": distance_tool,
+            "calculator_tool": calculator_tool,
+            "SAM_tool": self._sam_tool_wrapper
+        }
+        self.image = None
+
+
+    def _sam_tool_wrapper(self, target_class):
+        """Wrapper so the tool API only needs target_class."""
+        return self.sam.segment_image(self.image, target_class)
 
     def _format_system_prompt(self, metadata: Dict):
         """
@@ -126,7 +145,7 @@ class SatelliteVQAAgent:
         """
         Executes the agent loop with Multi-Step capability (ReAct Loop).
         """
-        
+        self.image = image
         system_prompt_text = self._format_system_prompt(metadata)
         
         # 1. Initialize History
@@ -161,7 +180,7 @@ class SatelliteVQAAgent:
 
             # 3. Generate Model Output
             # print(f"Step {step + 1}: Generating thought...")
-            generated_ids = self.model.generate(**inputs, max_new_tokens=512)
+            generated_ids = self.model.generate(**inputs, max_new_tokens=1024)
             
             generated_ids_trimmed = [
                 out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
@@ -216,8 +235,8 @@ class SatelliteVQAAgent:
                 tool_name = data.get("tool")
                 arguments = data.get("arguments")
                 
-                if tool_name in TOOL_MAP:
-                    func = TOOL_MAP[tool_name]
+                if tool_name in self.tool_map:
+                    func = self.tool_map[tool_name]
                     # Unpack arguments into function
                     result = func(**arguments)
                     return {"tool": tool_name, "result": result}

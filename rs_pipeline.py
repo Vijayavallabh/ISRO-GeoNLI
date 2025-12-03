@@ -11,6 +11,10 @@ from tasks.captioning import CaptioningTask
 from tasks.grounding import GroundingTask
 from tasks.vqa import VQATask
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class RSPipeline:
     """
@@ -38,7 +42,7 @@ class RSPipeline:
         """
         self.device = device
         
-        print(f"--- Initializing RS Pipeline on {self.device} ---")
+        logger.info(f"--- Initializing RS Pipeline on {self.device} ---")
         
         # Build VLM model (transformers only)
         vlm_model, vlm_processor = build_vlm_model(vlm_model_id, device)
@@ -51,7 +55,7 @@ class RSPipeline:
         # Initialize task handlers
         self.captioning = CaptioningTask(self.vlm)
         self.grounding = GroundingTask(self.vlm, self.sam3)
-        self.vqa = VQATask(self.vlm, self.grounding)
+        self.vqa = VQATask(self.vlm, self.grounding, self.sam3)
         
         print("Pipeline Initialization Complete.")
     
@@ -85,29 +89,19 @@ class RSPipeline:
             image, query, gsd, score_threshold
         )
     
-    def answer_question(self, image, query, detections=None, 
+    def answer_question(self, image, query, 
                        question_type="numeric", gsd=1.0):
         """
-        Answer a question about the image.
+        Answer a question about the image using the Smart Router.
         
         Args:
             image: PIL Image
             query: Question string
-            detections: Existing detections (optional, will auto-detect if needed)
-            question_type: 'numeric', 'binary', or 'semantic'
+            detections: DEPRECATED
+            question_type: DEPRECATED (Router handles this now)
             gsd: Ground Sample Distance
             
         Returns:
             Answer string
         """
-        if detections is None:
-            detections = []
-        
-        if question_type == "numeric":
-            return self.vqa.answer_numeric_question(image, query, detections, gsd)
-        elif question_type == "binary":
-            return self.vqa.answer_binary_question(image, query, detections, gsd)
-        elif question_type == "semantic":
-            return self.vqa.answer_semantic_question(image, query, detections, gsd)
-        else:
-            raise ValueError(f"Unknown question type: {question_type}")
+        return self.vqa.answer_question(image, query, gsd)
