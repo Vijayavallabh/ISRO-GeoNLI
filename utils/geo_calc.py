@@ -40,7 +40,7 @@ class GeoCalculator:
         num_vertices = len(approx)
         
         shape_map = {3: "triangle", 4: "rectangle", 5: "pentagon", 6: "hexagon"}
-        shape = shape_map.get(num_vertices, "polygon" if num_vertices > 6 else "unknown")
+        shape = shape_map.get(num_vertices, "circle" if num_vertices > 6 else "irregular")
 
         pixel_area = np.sum(mask_bool > 0)
         area_m2 = self.pixel_area_to_meter_sq(pixel_area)
