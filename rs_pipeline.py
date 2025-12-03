@@ -89,7 +89,7 @@ class RSPipeline:
             image, query, gsd, score_threshold
         )
     
-    def answer_question(self, image, query, 
+def answer_question(self, image, query, detections=None, 
                        question_type="numeric", gsd=1.0):
         """
         Answer a question about the image using the Smart Router.
@@ -97,8 +97,8 @@ class RSPipeline:
         Args:
             image: PIL Image
             query: Question string
-            detections: DEPRECATED
-            question_type: DEPRECATED (Router handles this now)
+            detections: Existing detections (optional)
+            question_type: The expected answer type (numeric, binary, semantic)
             gsd: Ground Sample Distance
             
         Returns:
@@ -106,4 +106,4 @@ class RSPipeline:
         """
         if detections is None:
             detections = []
-        return self.vqa.answer_question(image, query, detections, gsd, question_type)
+        return self.vqa.answer_question(image, query, detections, gsd, question_type=question_type)
