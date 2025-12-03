@@ -72,7 +72,14 @@ class VQATask:
     # --- Entry Points required by RS Pipeline ---
     def answer_question(self, image, query, detections, gsd=1.0, question_type="semantic"):
         """
-        Generic entry point for VQA. Matches the call expected by RS Pipeline.
+        Generic entry point called by the pipeline.
+        
+        Args:
+            image: PIL Image
+            query: The user's question
+            detections: List of grounding detections
+            gsd: Ground Sample Distance
+            question_type: 'numeric', 'binary', or 'semantic'
         """
         return self._answer_integrated(image, query, detections, gsd, question_type)
 
