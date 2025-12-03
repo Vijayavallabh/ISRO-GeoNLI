@@ -7,6 +7,10 @@ import torch
 from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 from transformers import Sam3Model, Sam3Processor
 from qwen_vl_utils import process_vision_info
+import os
+
+from dotenv import load_dotenv
+load_dotenv()
 
 def build_vlm_model(
     model_id="Qwen/Qwen3-VL-8B-Instruct",
@@ -85,9 +89,13 @@ def build_sam3_model(
         tuple: (sam_model, sam_processor)
     """
     print(f"Loading SAM 3: {model_id}...")
+
+    hf_token = os.getenv("HF_TOKEN")
+    if not hf_token:
+        raise RuntimeError("HF_TOKEN not found. Check .env file")
     
-    processor = Sam3Processor.from_pretrained(model_id)
-    model = Sam3Model.from_pretrained(model_id).to(device).eval()
+    processor = Sam3Processor.from_pretrained(model_id, token=hf_token)
+    model = Sam3Model.from_pretrained(model_id, token=hf_token).to(device).eval()
     
     print(f"SAM 3 loaded successfully on {device}")
     return model, processor

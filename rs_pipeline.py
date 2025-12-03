@@ -104,4 +104,6 @@ class RSPipeline:
         Returns:
             Answer string
         """
-        return self.vqa.answer_question(image, query, gsd)
+        if detections is None:
+            detections = []
+        return self.vqa.answer_question(image, query, detections, gsd, question_type)

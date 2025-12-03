@@ -17,7 +17,8 @@ from api_helpers import (
     decode_image_from_base64,
     get_image_from_input,
     image_to_base64,
-    format_grounding_response
+    format_grounding_response,
+    normalize_vqa_answer
 )
 from api_models import (
     ImageMetadata,
@@ -48,7 +49,7 @@ app = FastAPI(
 async def startup_event():
     """Production mode: preload models on startup."""
     print("\n" + "="*60)
-    print("🚀 STARTING SERVER - PRODUCTION MODE")
+    print("   STARTING SERVER - PRODUCTION MODE")
     print("="*60)
     print("   Environment: production")
     print("   Auto-reload: disabled")
@@ -59,12 +60,12 @@ async def startup_event():
     try:
         # Force pipeline initialization on startup
         pipeline = get_pipeline()
-        print("   ✅ Pipeline initialized successfully!")
+        print("      Pipeline initialized successfully!")
         print(f"      - Device: {pipeline.device}")
         print(f"      - VLM ready: {pipeline.vlm is not None}")
         print(f"      - SAM3 ready: {pipeline.sam3 is not None}")
     except Exception as e:
-        print(f"   ⚠️  WARNING: Pipeline initialization failed: {e}")
+        print(f"     WARNING: Pipeline initialization failed: {e}")
         print("      Server will start, but model will load on first request.")
     
     print("="*60 + "\n")
@@ -168,7 +169,9 @@ async def process_structured(request: StructuredRequest):
         
         if request.queries.attribute_query.binary:
             instruction = request.queries.attribute_query.binary["instruction"]
-            answer = pipeline.answer_question(image, instruction, question_type="binary")
+            raw_answer = pipeline.answer_question(image, instruction, question_type="binary")
+            # Normalize to yes/no
+            answer = normalize_vqa_answer(raw_answer, "binary")
             attr_results["binary"] = {
                 "instruction": instruction,
                 "response": answer,
@@ -177,7 +180,9 @@ async def process_structured(request: StructuredRequest):
         
         if request.queries.attribute_query.numeric:
             instruction = request.queries.attribute_query.numeric["instruction"]
-            answer = pipeline.answer_question(image, instruction, question_type="numeric")
+            raw_answer = pipeline.answer_question(image, instruction, question_type="numeric")
+            # Normalize to float
+            answer = normalize_vqa_answer(raw_answer, "numeric")
             attr_results["numeric"] = {
                 "instruction": instruction,
                 "response": answer,

@@ -2,7 +2,6 @@
 Image captioning task implementation.
 """
 import logging
-
 logger = logging.getLogger(__name__)
 
 class CaptioningTask:
@@ -14,17 +13,18 @@ class CaptioningTask:
             vlm_interface: VLMInterface instance
         """
         self.vlm = vlm_interface
-    
+
     def generate_caption(self, image, instruction):
         """
-        Generate detailed caption using two-stage approach.
-        
+        Generate a detailed but concise caption using a single VLM call
+        guided by a system prompt.
+
         Args:
             image: PIL Image
             instruction: User instruction for captioning
-            
+
         Returns:
-            Final compressed caption string
+            Final caption string
         """
         SYSTEM_PROMPT_CAPTION = """
 You are a vision-language assistant specialized in factual image captioning.
