@@ -104,6 +104,4 @@ def answer_question(self, image, query, detections=None,
         Returns:
             Answer string
         """
-        if detections is None:
-            detections = []
-        return self.vqa.answer_question(image, query, detections, gsd, question_type=question_type)
+        return self.vqa.answer_question(image, query, gsd, question_type=question_type)

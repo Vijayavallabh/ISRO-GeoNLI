@@ -70,11 +70,11 @@ class VQATask:
         )
     
     # --- Entry Points required by RS Pipeline ---
-    def answer_question(self, image, query, detections, gsd=1.0, question_type="semantic"):
+    def answer_question(self, image, query, gsd=1.0, question_type="semantic"):
         """
         Generic entry point for VQA. Matches the call expected by RS Pipeline.
         """
-        return self._answer_integrated(image, query, detections, gsd, question_type)
+        return self._answer_integrated(image, query, gsd, question_type)
 
     def answer_numeric_question(self, image, query, gsd=1.0):
         """Entry point for numeric questions."""

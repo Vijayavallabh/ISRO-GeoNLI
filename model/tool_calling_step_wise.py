@@ -115,20 +115,16 @@ class SatelliteVQAAgent:
         """Wrapper so the tool API only needs target_class."""
         return self.sam.segment_image(self.image, target_class)
 
-    def _format_system_prompt(self, metadata: Dict):
+    def _format_system_prompt(self):
         """
         Creates the system prompt injecting the tool definitions and image metadata.
         """
         tools_json = json.dumps(self.tools_schema, indent=2)
-        metadata_json = json.dumps(metadata, indent=2)
         
         prompt = f"""You are a Satellite Imagery Analysis Agent.
         
         You have access to the following TOOLS to answer user questions:
         {tools_json}
-
-        You are provided with METADATA about objects detected in the image:
-        {metadata_json}
 
         INSTRUCTIONS:
         1. Analyze the user query.
@@ -146,7 +142,7 @@ class SatelliteVQAAgent:
         Executes the agent loop with Multi-Step capability (ReAct Loop).
         """
         self.image = image
-        system_prompt_text = self._format_system_prompt(metadata)
+        system_prompt_text = self._format_system_prompt()
         
         # 1. Initialize History
         messages = [
