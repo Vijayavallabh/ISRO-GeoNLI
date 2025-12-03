@@ -9,12 +9,7 @@ from qwen_vl_utils import process_vision_info
 from utils.geo_calc import GeoCalculator 
 
 from model.model_builder import build_vlm_model, build_sam3_model
-
-try:
-    from satellite_vqa_tools import comparison_tool, distance_tool, calculator_tool
-except ImportError:
-    print("Warning: satellite_vqa_tools.py not found. Tool execution will fail.")
-
+from utils.satellite_vqa_tools import comparison_tool, distance_tool, calculator_tool
 
 
 SATELLITE_TOOLS = [
@@ -267,4 +262,5 @@ if __name__ == "__main__":
     }
     
     print("Agent setup complete")
+
 '''
