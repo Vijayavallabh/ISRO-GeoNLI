@@ -79,14 +79,14 @@ class RSPipeline:
         Args:
             image: PIL Image
             query: Object description/query
-            gsd: Ground Sample Distance (meters per pixel)
+            gsd: DEPRECATED (not needed for grounding)
             score_threshold: Confidence threshold
             
         Returns:
             List of detection dictionaries
         """
         return self.grounding.ground_objects(
-            image, query, gsd, score_threshold
+            image, query, score_threshold
         )
     
 def answer_question(self, image, query, detections=None, 
