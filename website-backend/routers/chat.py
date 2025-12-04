@@ -10,6 +10,17 @@ from dotenv import load_dotenv
 from jose import jwt, JWTError
 import requests
 import base64
+import json
+import google.generativeai as genai
+import httpx
+
+
+
+# Usage example:
+# api_key = "your-google-ai-studio-api-key"
+# result = call_gemini_ai(api_key)
+# print(result)
+
 
 load_dotenv()
 
@@ -17,6 +28,8 @@ router = APIRouter()
 
 sessions_collection = db["sessions"]
 messages_collection = db["messages"]
+
+api_key = os.getenv("GEMINI_API_KEY")
 
 s3_client = boto3.client(
     "s3",
@@ -32,6 +45,7 @@ JWT_ALGORITHM = "HS256"
 
 security = HTTPBearer()
 
+
 async def get_current_user_email(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
     try:
@@ -43,11 +57,26 @@ async def get_current_user_email(credentials: HTTPAuthorizationCredentials = Dep
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+async def call_external_api(instruction: dict):
+    url = "https://a2f7b83599770.notebooks.jarvislabs.net/proxy/8080/query"
+    payload = instruction
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+            return {"result": response.json()}  # call .json()
+    except httpx.HTTPStatusError as e:
+        print("ERROR FROM EXTERNAL API:", e.response.text)
+        raise HTTPException(status_code=e.response.status_code, detail=str("error"))
+    except httpx.RequestError as e:
+        print("REQUEST ERROR:", repr(e))
+        raise HTTPException(status_code=500, detail=str("error ero"))
+
 @router.post("/chat")
 async def chat_endpoint(
     session_id: str = Form(...),
     query: str = Form(...),
-    query_type: str = Form(...),
     spatial_resolution_m: float = Form(...),
     image_url: str | None = Form(None),
     image: UploadFile | None = File(None),
@@ -87,6 +116,7 @@ async def chat_endpoint(
 
     result = await sessions_collection.find_one({"sessionId":session_id})
     image = result["imageURL"]
+    print(image)
 
     response = requests.get(image)
     img = Image.open(BytesIO(response.content))
@@ -94,18 +124,22 @@ async def chat_endpoint(
 
     instruction = {
         "query":query,
-        "query_type":query_type,
-        "spatial_resolution_m":spatial_resolution_m,
-        "image_url":image,
-        "width":width,
-        "height":height
+        "image_url":image
     }
+    print(instruction)
+    data = await call_external_api(instruction)
 
-    bot_reply = {"text":"This is test bot response.", "image":image}
+    print(data)
 
-    ai_image_url = None
-    if bot_reply["image"]:
-        base64_str = bot_reply["image"]
+    response = data.get("result", {}).get("response", {})
+
+    text = str(response.get("text", ""))       
+    image_base64 = response.get("image", "")   
+
+
+    ai_image_url=""
+    if image_base64:
+        base64_str = image_base64
         if base64_str.startswith("data:image"):
             base64_str = base64_str.split(",", 1)[1]
         image_bytes = base64.b64decode(base64_str)
@@ -122,9 +156,10 @@ async def chat_endpoint(
         "sessionId": session_id,
         "role": "assistant",
         "type":"text",
-        "content": bot_reply["text"],
+        "content": text,
         "timestamp": int(time())
     })
+
     if ai_image_url:
         await messages_collection.insert_one({
             "sessionId": session_id,
@@ -133,5 +168,7 @@ async def chat_endpoint(
             "content": ai_image_url,
             "timestamp": int(time())
         })
-
-    return {"reply": bot_reply["text"],"image":ai_image_url, "response": instruction}
+    print(ai_image_url, type(ai_image_url))
+    print(type(text))
+    #return {"reply": reply, "response": instruction}
+    return {"text":text,"image":ai_image_url}
