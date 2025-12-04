@@ -150,7 +150,7 @@ class VQATask:
         elif q_type == "binary":
             type_instruction = "Answer this binary question with Yes or No."
         elif q_type == "semantic":
-            type_instruction = "Provide the final answer for this question very briefly. Intermediate outputs may be detailed."
+            type_instruction = "Provide the final answer as a single word or a short phrase (e.g., 'Urban', 'Adjacent'). Do NOT use full sentences."
             
         augmented_query = f"{type_instruction}. The ground sampling distance is {gsd} m/pixel. {query}"
         
@@ -187,22 +187,15 @@ class VQATask:
             )
         else: # semantic
             sys_prompt = (
-                "You are a remote sensing agent. The user asks a semantic question, which involves analysis of the image. "
-                "Understand the question and all the context, look for the answer based on the provided image and finally recheck."
-                "In answer provide your final answer very briefly."
+                "You are a remote sensing assistant. "
+                "Answer the question directly and concisely using as few words as possible. "
+                "Do not answer with full sentences. "
+                "Example: 'Rectangular' instead of 'The field is rectangular'. "
+                "Example: 'Blue' instead of 'It is blue'."
             )
         
         user_prompt = f"Question: '{query}'"
         if visual_note:
             user_prompt = f"Context: {visual_note}\n{user_prompt}"
 
-        raw_response = self.vlm.query(visual_input, user_prompt, system_prompt=sys_prompt, max_tokens=128)
-        
-        if q_type == "semantic":
-            match = re.search(r'answer:\s*(.*?)\}\}', raw_response, re.DOTALL | re.IGNORECASE)
-            
-            if match:
-                return match.group(1).strip()
-            else:
-                return raw_response
-        return raw_response
+        return self.vlm.query(visual_input, user_prompt, system_prompt=sys_prompt, max_tokens=128)
