@@ -83,18 +83,6 @@ class VQATask:
         """
         return self._answer_integrated(image, query, gsd, question_type)
 
-    def answer_numeric_question(self, image, query, gsd=1.0):
-        """Entry point for numeric questions."""
-        return self._answer_integrated(image, query, gsd, "numeric")
-
-    def answer_binary_question(self, image, query, gsd=1.0):
-        """Entry point for binary questions."""
-        return self._answer_integrated(image, query, gsd, "binary")
-
-    def answer_semantic_question(self, image, query, gsd=1.0):
-        """Entry point for semantic/descriptive questions."""
-        return self._answer_integrated(image, query, gsd, "semantic")
-
     # --- Core Routing Logic ---
 
     def route_question(self, question):
