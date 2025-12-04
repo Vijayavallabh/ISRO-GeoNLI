@@ -71,63 +71,25 @@ class VQATask:
     
     # --- Entry Points required by RS Pipeline ---
     def answer_question(self, image, query, gsd=1.0, question_type="semantic"):
-        """
-        Generic entry point called by the pipeline.
-        
-        Args:
-            image: PIL Image
-            query: The user's question
-            gsd: Ground Sample Distance
-            question_type: 'numeric', 'binary', or 'semantic'
-        """
         return self._answer_integrated(image, query, gsd, question_type)
 
     # --- Core Routing Logic ---
 
     def route_question(self, question):
-        """
-        Determines if a question needs SAM (grounding) or VLM (visual only).
-        """
+        # [Same as your file]
         messages = [
             {"role": "system", "content": ROUTER_SYSTEM_PROMPT},
             {"role": "user", "content": f"Question: {question}\nAnswer:"}
         ]
-        
-        text = self.vlm.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        
-        inputs = self.vlm.processor(
-            text=[text],
-            padding=True,
-            return_tensors="pt",
-        ).to(self.vlm.device)
-        
+        text = self.vlm.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = self.vlm.processor(text=[text], padding=True, return_tensors="pt").to(self.vlm.device)
         with torch.no_grad():
-            generated_ids = self.vlm.model.generate(
-                **inputs,
-                max_new_tokens=10,
-                temperature=0.1,
-                do_sample=False,
-            )
-            
-        generated_ids_trimmed = [
-            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-        ]
-        
-        output_text = self.vlm.processor.batch_decode(
-            generated_ids_trimmed, 
-            skip_special_tokens=True, 
-            clean_up_tokenization_spaces=False
-        )[0]
-        
-        route = output_text.strip().upper()
-        return "SAM" if "SAM" in route else "VLM"
+            generated_ids = self.vlm.model.generate(**inputs, max_new_tokens=10, do_sample=False)
+        output_text = self.vlm.processor.batch_decode(generated_ids[:, inputs['input_ids'].shape[1]:], skip_special_tokens=True)[0]
+        return "SAM" if "SAM" in output_text.upper() else "VLM"
 
+    
     def _answer_integrated(self, image, query, gsd, q_type):
-        """
-        Unified logic: Routes the question, then executes strategy respecting the question type.
-        """
         route = self.route_question(query)
         logger.info(f"--- Router Decision: {route} for {q_type} query '{query}' ---")
         
@@ -139,30 +101,26 @@ class VQATask:
     # --- Solvers ---
 
     def _answer_via_sam_path(self, image, query, gsd, q_type):
-        """
-        Handles 'SAM' questions: Uses the Tool-Calling Agent.
-        """
-        
-        # Guide the Agent based on question type
-        type_instruction = ""
+        """SAM Path: Uses Agent with strict format instructions."""
+  
+        format_instr = ""
         if q_type == "numeric":
-            type_instruction = "Answer this numeric question. Return a single number if possible."
+            format_instr = "Output ONLY a number."
         elif q_type == "binary":
-            type_instruction = "Answer this binary question with Yes or No."
-        elif q_type == "semantic":
-            type_instruction = "Provide the final answer as a single word or a short phrase (e.g., 'Urban', 'Adjacent'). Do NOT use full sentences."
+            format_instr = "Output ONLY 'Yes' or 'No'."
+        else:
+            format_instr = "Output ONLY a single word/phrase."
             
-        augmented_query = f"{type_instruction}. The ground sampling distance is {gsd} m/pixel. {query}"
+        augmented_query = f"{query} {format_instr} (GSD: {gsd} m/px)"
         
-        # Run the Multi-Step Tool Agent
-
         response_dict = self.agent.run(image, augmented_query, gsd=gsd)
         
         if "final_answer" in response_dict:
             return response_dict["final_answer"]
         else:
-            return f"Error: {response_dict.get('error', 'Agent failed to answer.')}"
+            return "Error"
 
+    
     def _answer_via_vlm_path(self, image, query, gsd, q_type):
         """
         Handles 'VLM' questions: Direct visual understanding with specialized prompts.
