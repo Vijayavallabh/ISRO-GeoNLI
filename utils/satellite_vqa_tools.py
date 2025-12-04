@@ -1,9 +1,11 @@
 import math
 from typing import List, Tuple, Union, Dict, Any
 
-def select_object_by_rank(objects_list: List[Dict], sort_key: str, rank_index: int):
+def select_object_by_rank(objects_list: List[Dict], sort_key: str, rank_index: int, return_key: str = None):
     """
-    Sorts by attribute and returns the Object ID so the agent can select it.
+    Sorts by sort_key.
+    If return_key is provided, returns that specific attribute (e.g., 'shape').
+    If return_key is None, returns the value of the sort_key (e.g., 'area').
     """
     valid_objects = [obj for obj in objects_list if sort_key in obj]
     
@@ -15,23 +17,31 @@ def select_object_by_rank(objects_list: List[Dict], sort_key: str, rank_index: i
 
     try:
         if rank_index > 0:
-            idx = rank_index - 1 # 1st -> 0
-            desc = "smallest"
+            idx = rank_index - 1 
+            desc = "smallest/first"
         elif rank_index < 0:
-            idx = rank_index # -1 -> last
-            desc = "largest"
+            idx = rank_index 
+            desc = "largest/last"
         else:
             return None, "Rank index cannot be 0."
 
         selected_obj = sorted_objs[idx]
-        obj_id = selected_obj.get('mask_id', 'unknown')
-        val = selected_obj[sort_key]
         
-        # We return the ID explicitly so the agent knows what to select
-        return selected_obj, f"Found the {desc} object. It has Mask ID: {obj_id} (value: {val:.2f})."
+        # Determine what value to return
+        key_to_fetch = return_key if return_key else sort_key
+        val = selected_obj.get(key_to_fetch, "N/A")
+        
+        # If returning ID or specific string, keep it raw. If float, format it.
+        if isinstance(val, float):
+            val_str = f"{val:.2f}"
+        else:
+            val_str = str(val)
+            
+        return selected_obj, val_str
         
     except IndexError:
-        return None, f"Rank {rank_index} out of bounds. Only {len(sorted_objs)} objects remain."
+        return None, f"Rank {rank_index} is out of bounds. Only found {len(sorted_objs)} objects."
+
 
 def filter_objects_by_region(objects_list: List[Dict], region: str, image_size: Tuple[int, int]):
     """
@@ -105,4 +115,5 @@ def calculator_tool(expression: str) -> Union[float, str]:
             if name not in allowed_names: raise NameError(f"Use of '{name}' is not allowed")
         return float(eval(code, {"__builtins__": {}}, allowed_names))
     except Exception as e: return f"Error computing expression: {e}"
+
 
