@@ -9,7 +9,7 @@ from io import BytesIO
 from PIL import Image
 from fastapi import HTTPException
 import requests
-
+import re
 from rs_pipeline import RSPipeline
 import re
 

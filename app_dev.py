@@ -89,7 +89,7 @@ def root():
 @app.get("/health")
 def health_check():
     """Health check endpoint."""
-    global _pipeline
+    from api_helpers import _pipeline
     is_ready = _pipeline is not None
     
     status = {
@@ -148,7 +148,7 @@ async def process_structured(request: StructuredRequest):
         # Draw annotations on image using existing utility
         annotated_image = None
         if detections:
-            obbs = [det['obb'] for det in detections]
+            obbs = [det['obbox'] for det in detections]
             annotated_img, _ = annotate_image_with_boxes(image.copy(), obbs)
             annotated_image = image_to_base64(annotated_img)
         
@@ -354,11 +354,33 @@ async def vqa_endpoint(payload: dict):
     if detections and isinstance(detections, list):
         parsed_dets = []
         for d in detections:
+
             if "obbox" in d:
-                cx, cy, w, h, angle = d["obbox"]
-                parsed_dets.append({"id": d.get("object-id", ""), "obb": ((cx, cy), (w, h), angle)})
-            else:
+                obbox = d["obbox"]
+
+                # Case 1: already 8-point polygon 
+                if isinstance(obbox, (list, tuple)) and len(obbox) == 8:
+                    polygon = list(map(float, obbox))
+
+                elif isinstance(obbox, (list, tuple)) and len(obbox) == 3:
+                    # RotatedRect -> polygon
+                    box_points = cv2.boxPoints(tuple(obbox))
+                    polygon = box_points.reshape(-1).tolist()
+
+                else:
+                    raise ValueError(f"Invalid obbox format: {obbox}")
+
+                parsed_dets.append({
+                    "id": d.get("object-id", ""),
+                    "obbox": polygon
+                })
+
+            elif "obbox" in d:
                 parsed_dets.append(d)
+
+            else:
+                raise KeyError(f"No obbox found in detection: {d}")
+
         detections = parsed_dets
 
     try:

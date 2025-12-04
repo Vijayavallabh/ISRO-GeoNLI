@@ -110,8 +110,8 @@ if __name__ == "__main__":
     print("\n" + "="*60)
     
     # Uncomment the tests you want to run
-    # test_structured_endpoint()
-    test_simple_query_endpoint()
+    test_structured_endpoint()
+    # test_simple_query_endpoint()
     # test_legacy_caption_endpoint()
     
     print("\n✨ Add your image paths and uncomment the tests to run them!")
