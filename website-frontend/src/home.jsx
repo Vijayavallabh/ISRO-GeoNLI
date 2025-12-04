@@ -105,7 +105,7 @@ const Home = () => {
       console.log([...formData.entries()]);
 
 
-      const res = await axios.post("http://localhost:5000/api/chat", formData, {
+      const res = await axios.post("https://isrogeonli.in/api/chat", formData, {
         headers: { "Content-Type": "multipart/form-data", "Authorization" : `Bearer ${token}` },
       });
 
@@ -124,7 +124,7 @@ const Home = () => {
     try{
       const token = sessionStorage.getItem("token");
       console.log(token);
-      const res = await axios.get("http://localhost:5000/api/chat-history",{
+      const res = await axios.get("https://isrogeonli.in/api/chat-history",{
         headers:{"Authorization":`Bearer ${token}`}
       });
       console.log(res.data);
@@ -142,7 +142,7 @@ const Home = () => {
       const token = sessionStorage.getItem("token");
       sessionStorage.removeItem("currentSessionId");
       sessionStorage.setItem("currentSessionId", sessionId);
-      const res = await axios.get(`http://localhost:5000/api/get-history`, {
+      const res = await axios.get(`https://isrogeonli.in/api/get-history`, {
         headers: { "Authorization": `Bearer ${token}` },
         params: { sessionId: sessionId }
       });
