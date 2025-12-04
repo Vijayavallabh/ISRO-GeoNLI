@@ -7,7 +7,8 @@ import base64
 import json
 from pathlib import Path
 
-BASE_URL = "https://a2f7b83599770.notebooks.jarvislabs.net/proxy/8080/"
+# BASE_URL = "https://a2f7b83599770.notebooks.jarvislabs.net/proxy/8080/"
+BASE_URL = "http://127.0.0.1:8000"
 
 PAYLOAD = {
             "input_image": {
@@ -65,7 +66,7 @@ def test_simple_query_endpoint():
     print("="*60)
 
     payload = {
-        "query": "locate the sun here",
+        "query": "describe the image to me",
         "image_path": "/home/ISRO-GeoNLI/sample_image.png",
     }
 
@@ -92,7 +93,7 @@ def test_simple_query_endpoint():
         answer = results["grounding"].get("detections")
 
     print("\n✅ Extracted Answer:")
-    print(answer)
+    print(data)
 
 
 
@@ -126,8 +127,8 @@ if __name__ == "__main__":
     print("\n" + "="*60)
     
     # Uncomment the tests you want to run
-    # test_structured_endpoint()
-    test_simple_query_endpoint()
+    test_structured_endpoint()
+    # test_simple_query_endpoint()
     # test_legacy_caption_endpoint()
     
     print("\n✨ Add your image paths and uncomment the tests to run them!")

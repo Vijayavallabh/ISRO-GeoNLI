@@ -118,88 +118,98 @@ def health_check():
 # ============================================================================
 
 @app.post("/process")
-async def process_structured(request: StructuredRequest):
+async def process_structured(request: StructuredRequest, include_annotations: bool = False):
     """
     Process structured request matching query.json schema.
     Executes each query type individually through the pipeline.
     """
     pipeline = get_pipeline()
-    
-    # Get the image
+
+    # Load image
     image = get_image_from_input(request.input_image)
-    
-    # Process each query type
+
+    # Target response schema
     results = {
-        "image_id": request.input_image.image_id,
-        "metadata": request.input_image.metadata.dict() if request.input_image.metadata else None,
-        "results": {}
+        "input_image": {
+            "image_id": request.input_image.image_id,
+            "image_url": request.input_image.image_url,
+            "metadata": (
+                request.input_image.metadata.dict()
+                if request.input_image.metadata
+                else None
+            )
+        },
+        "queries": {}
     }
-    
+
     # Caption Query
     if request.queries.caption_query:
         instruction = request.queries.caption_query.instruction
         caption = pipeline.generate_caption(image, instruction)
-        results["results"]["caption"] = {
+
+        results["queries"]["caption_query"] = {
             "instruction": instruction,
-            "response": caption,
-            "annotated_image": None  # No annotation for caption
+            "response": caption
         }
-    
+
     # Grounding Query
     if request.queries.grounding_query:
         instruction = request.queries.grounding_query.instruction
         detections = pipeline.ground_objects(image, instruction)
-        
-        # Draw annotations on image using existing utility
+
         annotated_image = None
-        if detections:
-            obbs = [det['obbox'] for det in detections]
+        if include_annotations and detections:
+            obbs = [det["obbox"] for det in detections]
             annotated_img, _ = annotate_image_with_boxes(image.copy(), obbs)
             annotated_image = image_to_base64(annotated_img)
-        
-        results["results"]["grounding"] = {
+
+        results["queries"]["grounding_query"] = {
             "instruction": instruction,
-            "detections": format_grounding_response(detections),
-            "annotated_image": annotated_image  # Base64 annotated image
+            "response": format_grounding_response(detections),
+            **({"annotated_image": annotated_image} if include_annotations else {})
         }
-    
-    # Attribute Queries (VQA)
+
+    # Attribute Queries
     if request.queries.attribute_query:
         attr_results = {}
-        
+
         if request.queries.attribute_query.binary:
             instruction = request.queries.attribute_query.binary["instruction"]
-            raw_answer = pipeline.answer_question(image, instruction, question_type="binary")
-            # Normalize to yes/no
+            raw_answer = pipeline.answer_question(
+                image, instruction, question_type="binary"
+            )
             answer = normalize_vqa_answer(raw_answer, "binary")
+
             attr_results["binary"] = {
                 "instruction": instruction,
-                "response": answer,
-                "annotated_image": None  # No annotation for VQA
+                "response": answer
             }
-        
+
         if request.queries.attribute_query.numeric:
             instruction = request.queries.attribute_query.numeric["instruction"]
-            raw_answer = pipeline.answer_question(image, instruction, question_type="numeric")
-            # Normalize to float
+            raw_answer = pipeline.answer_question(
+                image, instruction, question_type="numeric"
+            )
             answer = normalize_vqa_answer(raw_answer, "numeric")
+
             attr_results["numeric"] = {
                 "instruction": instruction,
-                "response": answer,
-                "annotated_image": None  # No annotation for VQA
+                "response": answer
             }
-        
+
         if request.queries.attribute_query.semantic:
             instruction = request.queries.attribute_query.semantic["instruction"]
-            answer = pipeline.answer_question(image, instruction, question_type="semantic")
+            answer = pipeline.answer_question(
+                image, instruction, question_type="semantic"
+            )
+
             attr_results["semantic"] = {
                 "instruction": instruction,
-                "response": answer,
-                "annotated_image": None  # No annotation for VQA
+                "response": answer
             }
-        
-        results["results"]["attributes"] = attr_results
-    
+
+        results["queries"]["attribute_query"] = attr_results
+
     return results
 
 
@@ -236,8 +246,33 @@ async def process_simple_query(request: SimpleRequest):
     structured = StructuredRequest(input_image=input_image, queries=queries)
     
     # Process through unified endpoint
-    return await process_structured(structured)
+    structured_response = await process_structured( structured, include_annotations=True )
 
+    response_text = ""
+    response_image = ""
+    queries_out = structured_response.get("queries", {})
+
+    if "attribute_query" in queries_out:
+        attr = queries_out["attribute_query"]
+        for _, v in attr.items():
+            response_text = str(v.get("response", ""))
+            break
+
+    elif "caption_query" in queries_out:
+        response_text = queries_out["caption_query"].get("response", "")
+
+    elif "grounding_query" in queries_out:
+        grounding = queries_out["grounding_query"]
+        response_text = grounding.get("response", [])
+        response_image = grounding.get("annotated_image", "") or ""
+
+    return {
+        "query": request.query,
+        "response": {
+            "text": response_text,
+            "image": response_image
+        }
+    }
 
 # ============================================================================
 # LEGACY ENDPOINTS - Backward compatibility
