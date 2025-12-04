@@ -83,18 +83,6 @@ class VQATask:
         """
         return self._answer_integrated(image, query, gsd, question_type)
 
-    def answer_numeric_question(self, image, query, gsd=1.0):
-        """Entry point for numeric questions."""
-        return self._answer_integrated(image, query, gsd, "numeric")
-
-    def answer_binary_question(self, image, query, gsd=1.0):
-        """Entry point for binary questions."""
-        return self._answer_integrated(image, query, gsd, "binary")
-
-    def answer_semantic_question(self, image, query, gsd=1.0):
-        """Entry point for semantic/descriptive questions."""
-        return self._answer_integrated(image, query, gsd, "semantic")
-
     # --- Core Routing Logic ---
 
     def route_question(self, question):
@@ -210,4 +198,13 @@ class VQATask:
         if visual_note:
             user_prompt = f"Context: {visual_note}\n{user_prompt}"
 
-        return self.vlm.query(visual_input, user_prompt, system_prompt=sys_prompt, max_tokens=128)
+        response = self.vlm.query(visual_input, user_prompt, system_prompt=sys_prompt, max_tokens=128)
+        try:
+            parsed = json.loads(response)
+            response = parsed['answer']
+        except (json.JSONDecodeError, KeyError):
+            match = re.search(r'answer["\']?\s*:\s*["\']([^"\']+)["\']', response, re.IGNORECASE)
+            if match:
+                response = match.group(1)
+                
+        return response
