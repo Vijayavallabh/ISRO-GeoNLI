@@ -187,9 +187,8 @@ class VQATask:
             )
         else: # semantic
             sys_prompt = (
-                "You are a remote sensing agent. Answer the question in the following format"
-                "{{thoughts: str, answer: str}}"
-                "In thoughts understand the question, look for the answer based on the provided image and finally recheck."
+                "You are a remote sensing agent. The user asks a semantic question, which involves analysis of the image. "
+                "Understand the question and all the context, look for the answer based on the provided image and finally recheck."
                 "In answer provide your final answer very briefly."
             )
         
