@@ -28,7 +28,7 @@ class RSPipeline:
     
     def __init__(
         self,
-        vlm_model_id="Qwen/Qwen3-VL-8B-Instruct",
+        vlm_model_id="Dinosaur2314/qwen_finetune11",
         sam_model_id="facebook/sam3",
         device="cuda" if torch.cuda.is_available() else "cpu"
     ):
