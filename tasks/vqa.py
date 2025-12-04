@@ -7,7 +7,6 @@ import torch
 from collections import defaultdict
 from utils.visualization import annotate_image_with_boxes
 from model.tool_calling_step_wise import SatelliteVQAAgent
-import json
 
 import logging
 
@@ -34,15 +33,16 @@ Route to SAM3 when the question requires:
 6. **Ratio/Proportion Comparisons**: "ratio of", "more X than Y"
 7. **Spatial Relationships Requiring Segmentation**: "adjacent to", "overlap", "precise arrangement"
 8. **Size/Dimension Analysis**: "size of", "how wide"
+9. **Object Existence/Presence**: "Is a X present?", "Are there any X?"
+10. **Exact Comparisons**: "more ships than harbors?" (Use the tools appropriately)
 
 ## When to Route to VLM
 Route to VLM when the question can be answered through visual understanding alone:
-1. **Object Existence/Presence**: "Is a X present?", "Are there any X?"
-2. **Visual Attributes**: "color", "texture", "appearance"
-3. **Object Recognition/Classification**: "What type of...", "Is this urban/rural?"
-4. **Scene Understanding**: "weather", "time of day", "context"
-5. **Qualitative Descriptions**: "Describe the landscape"
-6. **Approximate Comparisons**: "more trees than buildings" (visual estimate)
+1. **Visual Attributes**: "color", "texture", "appearance"
+2. **Object Recognition/Classification**: "What type of...", "Is this urban/rural?"
+3. **Scene Understanding**: "weather", "time of day", "context"
+4. **Qualitative Descriptions**: "Describe the landscape"
+5. **Approximate Comparisons**: "more trees than buildings" (visual estimate)
 
 ## Output Format
 Respond with ONLY a single word:
@@ -78,7 +78,6 @@ class VQATask:
         Args:
             image: PIL Image
             query: The user's question
-            detections: List of grounding detections
             gsd: Ground Sample Distance
             question_type: 'numeric', 'binary', or 'semantic'
         """
@@ -152,13 +151,13 @@ class VQATask:
         elif q_type == "binary":
             type_instruction = "Answer this binary question with Yes or No."
         elif q_type == "semantic":
-            type_instruction = "Provide the final answer for this question very briefly. Intermediate outputs may be detailed."
+            type_instruction = "Provide the final answer as a single word or a short phrase (e.g., 'Urban', 'Adjacent'). Do NOT use full sentences."
             
         augmented_query = f"{type_instruction}. The ground sampling distance is {gsd} m/pixel. {query}"
         
         # Run the Multi-Step Tool Agent
 
-        response_dict = self.agent.run(image, augmented_query,gsd=gsd)
+        response_dict = self.agent.run(image, augmented_query, gsd=gsd)
         
         if "final_answer" in response_dict:
             return response_dict["final_answer"]
@@ -177,35 +176,27 @@ class VQATask:
         if q_type == "numeric":
             sys_prompt = (
                 "You are a remote sensing assistant. "
-                "The user asks a numeric question. "
-                "Count or estimate the quantity based on the visual image. "
+                "The user asks a numeric question, to be answered only with a numeric value. "
+                "Estimate or count the required value based on the visual image, and all the relevant context from the question. "
                 "Provide the number clearly."
             )
         elif q_type == "binary":
             sys_prompt = (
                 "You are a remote sensing assistant. "
                 "The user asks a binary (Yes/No) question. "
-                "Analyze the image and answer with ONLY 'Yes' or 'No'."
+                "Analyze the image and the question context, and answer with ONLY 'Yes' or 'No'."
             )
         else: # semantic
             sys_prompt = (
-                "You are a remote sensing agent. Answer the question in the following format"
-                "{{thoughts: str, answer: str}}"
-                "In thoughts understand the question, look for the answer based on the provided image and finally recheck."
-                "In answer provide your final answer very briefly."
+                "You are a remote sensing assistant. "
+                "Answer the question directly and concisely using as few words as possible. "
+                "Do not answer with full sentences. "
+                "Example: 'Rectangular' instead of 'The field is rectangular'. "
+                "Example: 'Blue' instead of 'It is blue'."
             )
         
         user_prompt = f"Question: '{query}'"
         if visual_note:
             user_prompt = f"Context: {visual_note}\n{user_prompt}"
 
-        response = self.vlm.query(visual_input, user_prompt, system_prompt=sys_prompt, max_tokens=128)
-        try:
-            parsed = json.loads(response)
-            response = parsed['answer']
-        except (json.JSONDecodeError, KeyError):
-            match = re.search(r'answer["\']?\s*:\s*["\']([^"\']+)["\']', response, re.IGNORECASE)
-            if match:
-                response = match.group(1)
-                
-        return response
+        return self.vlm.query(visual_input, user_prompt, system_prompt=sys_prompt, max_tokens=128)

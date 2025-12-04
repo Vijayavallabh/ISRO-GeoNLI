@@ -30,75 +30,34 @@ class GroundingTask:
         """
         Extract the target object class from description using VLM.
         Uses text-only query mode (image=None).
-        Updated with Remote Sensing Segmentation Specialist prompt.
         """
-        prompt = f"""You are a Remote Sensing Segmentation Specialist. Your task is to convert a user description into a "Simple Noun Phrase" compatible with the SAM 3 segmentation model.
-        
-USER DESCRIPTION: "{query}"
-        
-DOMAIN CONTEXT:
-- The image is a satellite/aerial view (nadir perspective).
-- Objects are defined by visual properties (Shape, Color, Material).
-- Spatial relations (left, right, near) are IRRELEVANT for class definition and must be removed.
-        
-PRIORITY VOCABULARY (Align with these terms if possible):
-- Vehicles: airplane, bus, car, cargo ship, excavator, ferry, locomotive, truck, van, vehicle, yacht.
-- Infrastructure: bridge, building, chimney, dam, dock, fence, greenhouse, helipad, highway, parking lot, pier, pipeline, railway, road, roof, runway, silo, solar panel, stadium, storage tank, swimming pool, tent, tower, track, warehouse, wind turbine.
-- Nature: beach, field, forest, grass, lake, river, rock, sand, tree, water.
-        
-INSTRUCTIONS:
-1. IDENTIFY the core object class (e.g., convert "place where cars park" -> "parking lot").
-2. KEEP visual adjectives: Color (red, white), Material (concrete, metal), Shape (circular, rectangular).
-3. REMOVE spatial words: "next to", "in the middle", "top left", "row of".
-4. REMOVE visual noise: "image of", "view of", "group of", "cluster of".
-5. REMOVE articles and verbs: "the", "a", "is", "are".
-        
-EXAMPLES:
-Input: "the red cars parked in the lot"
-Output: red car
-        
-Input: "a large circular storage tank near the river"
-Output: large circular storage tank
-        
-Input: "long unpaved roads going through the forest"
-Output: unpaved road
-        
-Input: "row of solar panels"
-Output: solar panel
-        
-Input: "the concrete bridge crossing the water"
-Output: concrete bridge
-        
-OUTPUT (Return ONLY the noun phrase):"""
+        prompt = (
+            f"Extract only the main object type (1-2 words) from this description: '{query}'. "
+            "Return ONLY the object type, nothing else."
+        )
         
         logger.info(f"\n[Grounding] Stage 1: Target Extraction for '{query}'")
         
         try:
             # Pass None for image to use text-only mode
-            output_text = self.vlm.query(None, prompt, max_tokens=30)
+            output_text = self.vlm.query(None, prompt, max_tokens=10)
             
-            # Clean up response - remove quotes, periods, extra whitespace
+            # clean up response
             target_class = output_text.strip().lower()
-            target_class = target_class.strip('"\'.,;:')
-            
-            # Limit to 8 words maximum
-            words = target_class.split()[:8]
+            words = target_class.split()[:2]
             target_class = " ".join(words)
             
             if target_class:
-                logger.info(f"   [Extraction] Target Class: '{target_class}'")
                 return target_class
                 
         except Exception as e:
             logger.exception(f"   [Extraction Warning] {e}")
             
-        # Fallback heuristic if VLM fails - improved to preserve specific nouns
+        # Fallback heuristic if VLM fails
         words = query.lower().split()
-        filler_words = {'the', 'a', 'an', 'this', 'that', 'is', 'are', 'in', 'on', 'at', 'of'}
-        important_words = [w for w in words if w not in filler_words][:6]
-        fallback = " ".join(important_words) if important_words else "object"
-        logger.info(f"   [Extraction Fallback] Using: '{fallback}'")
-        return fallback
+        skip_words = {'the', 'a', 'an', 'in', 'on', 'at', 'with', 'by', 'of', 'find', 'locate'}
+        important_words = [w for w in words if w not in skip_words][:2]
+        return " ".join(important_words) if important_words else "object"
 
     def get_obb_from_mask(self, mask):
         """Convert binary mask to oriented bounding box (8 coords)."""
@@ -125,60 +84,6 @@ OUTPUT (Return ONLY the noun phrase):"""
         obb = [float(coord) for point in box_points for coord in point]
         
         return obb, largest_contour
-
-    def extract_geometric_features(self, mask, obb):
-        """Extract geometric features from mask and OBB"""
-        if hasattr(mask, 'cpu'):
-            mask_np = mask.cpu().numpy().astype(np.uint8)
-        else:
-            mask_np = mask.astype(np.uint8)
-        mask_np = (mask_np > 0.5).astype(np.uint8)
-        
-        # Get contour for area calculation
-        contours, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if len(contours) == 0:
-            return None
-        
-        largest_contour = max(contours, key=cv2.contourArea)
-        area = cv2.contourArea(largest_contour)
-        
-        # Get minimum area rectangle for angle and dimensions
-        rect = cv2.minAreaRect(largest_contour)
-        (cx, cy), (w, h), angle = rect
-        
-        # Ensure w >= h for consistency
-        if w < h:
-            w, h = h, w
-            angle = (angle + 90) % 180
-        
-        aspect_ratio = w / (h + 1e-6)
-        
-        # Normalize angle to [0, 90]
-        angle_norm = abs(angle) % 90
-        is_horizontal = angle_norm < 5 or angle_norm > 85
-        
-        # Compute shape compactness (circularity)
-        perimeter = cv2.arcLength(largest_contour, True)
-        compactness = (4 * np.pi * area) / (perimeter ** 2 + 1e-6) if perimeter > 0 else 0
-        
-        return {
-            "width": float(w),
-            "height": float(h),
-            "area": float(area),
-            "aspect_ratio": float(aspect_ratio),
-            "angle": float(angle_norm),
-            "is_horizontal": bool(is_horizontal),
-            "compactness": float(compactness)
-        }
-
-    def normalize_obb_to_1000(self, obb, img_w, img_h):
-        """Normalize OBB coordinates from pixel space to 0-1000 range"""
-        normalized_obb = []
-        for i in range(0, 8, 2):
-            x_norm = (obb[i] / img_w) * 1000
-            y_norm = (obb[i+1] / img_h) * 1000
-            normalized_obb.extend([x_norm, y_norm])
-        return normalized_obb
 
     def create_annotated_image(self, original_image, masks, sam_metadata):
         """Create an annotated image with segmentation masks, IDs, and grid lines."""
@@ -250,7 +155,6 @@ OUTPUT (Return ONLY the noun phrase):"""
         """
         Fallback: Use VLM to directly predict multiple horizontal bounding boxes.
         Returns a list of obb (8 coords) or an empty list.
-        Updated to handle coordinate normalization properly.
         """
         img_w, img_h = image.size
         
@@ -282,7 +186,7 @@ OUTPUT (Return ONLY the noun phrase):"""
         
         # Must have a count divisible by 4
         if len(numbers) < 4 or len(numbers) % 4 != 0:
-            logger.info(f"    [Fallback] Could not parse a valid number of coordinates ({len(numbers)}).")
+            print(f"    [Fallback] Could not parse a valid number of coordinates ({len(numbers)}).")
             return []
             
         obbs = []
@@ -291,17 +195,6 @@ OUTPUT (Return ONLY the noun phrase):"""
             try:
                 x_min, y_min, x_max, y_max = [float(n) for n in numbers[i:i+4]]
                 
-                # Check if coordinates are in normalized 0-1000 range
-                # (heuristic: if all values > img dimensions, assume normalized)
-                if all(coord <= 1000 for coord in [x_min, y_min, x_max, y_max]) and \
-                   any(coord > max(img_w, img_h) for coord in [x_min, y_min, x_max, y_max]):
-                    # Coordinates appear to be normalized, convert to pixels
-                    logger.debug(f"    [Fallback] Detected normalized coordinates, converting to pixels")
-                    x_min = (x_min / 1000.0) * img_w
-                    y_min = (y_min / 1000.0) * img_h
-                    x_max = (x_max / 1000.0) * img_w
-                    y_max = (y_max / 1000.0) * img_h
-                
                 # Clamp and enforce x_min < x_max, y_min < y_max
                 x_min = max(0, min(img_w, x_min))
                 y_min = max(0, min(img_h, y_min))
@@ -309,7 +202,7 @@ OUTPUT (Return ONLY the noun phrase):"""
                 y_max = max(0, min(img_h, y_max))
 
                 if x_max <= x_min or y_max <= y_min:
-                    logger.info(f"    [Fallback] Skipping invalid box dimensions: {x_min} {y_min} {x_max} {y_max}")
+                    print(f"    [Fallback] Skipping invalid box dimensions: {x_min} {y_min} {x_max} {y_max}")
                     continue
                     
                 # Convert to OBB (8 coords)
@@ -320,74 +213,48 @@ OUTPUT (Return ONLY the noun phrase):"""
                     x_min, y_max   # bottom-left
                 ]
                 obbs.append(obb)
-                logger.debug(f"    [Fallback] Extracted box: ({x_min:.1f}, {y_min:.1f}, {x_max:.1f}, {y_max:.1f})")
             except ValueError:
                 logger.debug("    [Fallback] Error converting parsed string to float.")
                 continue
-        
-        if obbs:
-            logger.info(f"    [Fallback] Found {len(obbs)} objects via Qwen Direct.")
                 
         return obbs    
 
     def select_best_obbs(self, image, description, candidate_obbs, sam_metadata, masks):
         """
         Use VLM to select the best OBBs (plural) from candidates using annotated image.
-        Updated with geometric features and normalized coordinates.
         Returns a tuple: (list of selected OBBs, list of selected indices).
         """
         if not candidate_obbs:
             return [], []
-        
-        img_w, img_h = image.size
             
         # Create annotated image
         annotated_image = self.create_annotated_image(image, masks, sam_metadata)
         
-        # Create prompt with normalized coordinates and geometric features
-        obb_descriptions = []
-        for meta in sam_metadata:
-            # Normalize OBB to 0-1000 range
-            norm_obb = self.normalize_obb_to_1000(meta['obb'], img_w, img_h)
-            geom = meta['geometric']
-            
-            desc = (f"Mask {meta['mask_id']}: "
-                   f"corners=({norm_obb[0]:.0f},{norm_obb[1]:.0f}), ({norm_obb[2]:.0f},{norm_obb[3]:.0f}), "
-                   f"({norm_obb[4]:.0f},{norm_obb[5]:.0f}), ({norm_obb[6]:.0f},{norm_obb[7]:.0f}) | "
-                   f"width_rel={geom['width_rel']:.3f}, height_rel={geom['height_rel']:.3f}, "
-                   f"area_rel={geom['area_rel']:.4f}, aspect_ratio={geom['aspect_ratio']:.2f}, "
-                   f"angle={geom['angle']:.1f}°, horizontal={geom['is_horizontal']}, "
-                   f"compactness={geom['compactness']:.3f}")
-            obb_descriptions.append(desc)
+        # Create prompt
+        obb_descriptions = "\n".join([
+            f"Mask {meta['mask_id']}: corners=({meta['obb'][0]:.1f},{meta['obb'][1]:.1f}), "
+            f"({meta['obb'][2]:.1f},{meta['obb'][3]:.1f}), "
+            f"({meta['obb'][4]:.1f},{meta['obb'][5]:.1f}), "
+            f"({meta['obb'][6]:.1f},{meta['obb'][7]:.1f})"
+            for meta in sam_metadata
+        ])
         
-        obb_descriptions_text = "\n".join(obb_descriptions)
+        all_ids = [str(meta['mask_id']) for meta in sam_metadata]
         
-        prompt_text = f"""You are analyzing a remote sensing/aerial image for object localization.
-
-TARGET DESCRIPTION: "{description}"
-
-CANDIDATE MASKS (shown with colored overlays and numeric IDs):
-{obb_descriptions_text}
-
-COORDINATE SYSTEM NOTES:
-- OBB corners are normalized to 0-1000 range (not pixels)
-- (0,0) is at the top-left corner of the image
-- width_rel, height_rel, area_rel are normalized relative to image dimensions (0.0 to 1.0)
-- aspect_ratio is width/height ratio
-- angle is orientation in degrees (0-90°)
-- horizontal indicates if object is aligned horizontally (angle near 0° or 90°)
-- compactness measures circularity (1.0 = perfect circle, lower = more elongated)
-
-GRID OVERLAY:
-- The image has a 10x10 grid overlay to help with spatial reference
-- Vertical lines are MAGENTA, horizontal lines are CYAN
-
-TASK: Identify ALL mask IDs that correspond to the target object(s) described above. Consider both the visual appearance in the image and the geometric properties provided.
-If no mask corresponds, return an empty string.
-
-OUTPUT: Reply with ONLY the mask ID numbers (e.g., "0 3 5 8"). Use spaces to separate IDs. No explanation needed."""
+        prompt_text = (
+            f"You are analyzing a remote sensing/aerial image for object localization.\n"
+            f"TARGET DESCRIPTION: \"{description}\"\n"
+            f"CANDIDATE MASKS (shown with colored overlays and numeric IDs):\n"
+            f"{obb_descriptions}\n"
+            f"NOTE: The image has a 10x10 grid overlay to help with spatial reference. "
+            f"Vertical lines are MAGENTA, horizontal lines are CYAN.\n"
+            f"NOTE: Coordinate (0,0) is at the top-left corner of the image.\n"
+            f"TASK: Identify ALL mask IDs that correspond to the target object(s) described above. "
+            f"If no mask corresponds, return an empty string.\n"
+            f"OUTPUT: Reply with ONLY the mask ID numbers (e.g., \"0 3 5 8\"). Use spaces to separate IDs. No explanation needed."
+        )
         
-        logger.info("\n   [Selection] Asking VLM to select best candidate(s)...")
+        logger.info("\n   [Selection] Asking VLM to select best candidate...")
         # Pass annotated image here
         response = self.vlm.query(annotated_image, prompt_text, max_tokens=20)
         logger.info(f"   [Selection] Response: '{response}'")
@@ -413,7 +280,7 @@ OUTPUT: Reply with ONLY the mask ID numbers (e.g., "0 3 5 8"). Use spaces to sep
             return selected_obbs, selected_indices
             
         # Fallback: largest area (if VLM fails to select any)
-        logger.info("    [Selection] Parsing failed or VLM selected none. Falling back to largest mask if multiple exist.")
+        logging.info("    [Selection] Parsing failed or VLM selected none. Falling back to largest mask if multiple exist.")
         if candidate_obbs:
             areas = [meta['area'] for meta in sam_metadata]
             selected_idx = int(np.argmax(areas))
@@ -448,44 +315,25 @@ OUTPUT: Reply with ONLY the mask ID numbers (e.g., "0 3 5 8"). Use spaces to sep
         if sam_results and sam_results.get("masks") is not None and len(sam_results["masks"]) > 0:
             masks = sam_results["masks"]
             
-            # Re-process masks to get reliable OBBs (8 coords), Areas, and Geometric Features
+            # Re-process masks to get reliable OBBs (8 coords) and Areas
             reprocessed_metadata = []
             valid_obbs = []
             valid_masks = []
             
-            img_w, img_h = image.size
-            img_area = img_w * img_h
-            
             for idx, mask in enumerate(masks):
                 obb, contour = self.get_obb_from_mask(mask)
                 if obb is not None:
-                    # Extract geometric features
-                    geom_features = self.extract_geometric_features(mask, obb)
-                    
-                    if geom_features is None:
-                        continue
-                    
-                    area = geom_features["area"]
+                    area = cv2.contourArea(contour) if contour is not None else 0
                     confidence = 0.0
                     # Try to retrieve score if available in sam_results metadata
                     if idx < len(sam_results.get("metadata", [])):
                         confidence = sam_results["metadata"][idx].get("confidence", 0.0)
-                    
-                    # Normalize geometric features relative to image dimensions
+                        
                     reprocessed_metadata.append({
                         "mask_id": len(valid_obbs), # Re-index for consistent 0..N
                         "obb": obb,
                         "confidence": confidence,
-                        "area": area,
-                        "geometric": {
-                            "width_rel": geom_features["width"] / img_w,
-                            "height_rel": geom_features["height"] / img_h,
-                            "area_rel": area / img_area,
-                            "aspect_ratio": geom_features["aspect_ratio"],
-                            "angle": geom_features["angle"],
-                            "is_horizontal": geom_features["is_horizontal"],
-                            "compactness": geom_features["compactness"]
-                        }
+                        "area": float(area)
                     })
                     valid_obbs.append(obb)
                     valid_masks.append(mask)
@@ -511,7 +359,7 @@ OUTPUT: Reply with ONLY the mask ID numbers (e.g., "0 3 5 8"). Use spaces to sep
             final_obbs = self.qwen_direct_localization(image, query)
             method = "qwen_direct"
             if final_obbs:
-                logger.info(f"    [Qwen Direct] Found {len(final_obbs)} objects.")
+                print(f"    [Qwen Direct] Found {len(final_obbs)} objects.")
         else:
             # Selection: Qwen Select (returns list of OBBs and indices)
             final_obbs, selected_indices = self.select_best_obbs(
