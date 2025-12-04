@@ -3,12 +3,8 @@ import json
 import re
 from typing import List, Dict, Any, Union, Tuple
 from PIL import Image
-from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
-from transformers import Sam3Model, Sam3Processor
 from qwen_vl_utils import process_vision_info
-from utils.geo_calc import GeoCalculator 
-from model.model_builder import build_vlm_model, build_sam3_model
-from utils.satellite_vqa_tools import select_object_by_rank, calculate_distance_by_indices, calculator_tool, filter_objects_by_region
+from utils.satellite_vqa_tools import select_object_by_rank, calculate_distance_by_indices, calculator_tool
 
 import logging
 
@@ -30,29 +26,15 @@ SATELLITE_TOOLS = [
         }
     },
     {
-        "name": "filter_objects",
-        "description": "Step 2 (Optional): Filters the currently detected objects by spatial region (e.g., 'top left', 'center').",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "region": {
-                    "type": "string",
-                    "description": "The region to filter by: 'top', 'bottom', 'left', 'right', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'."
-                }
-            },
-            "required": ["region"]
-        }
-    },
-    {
         "name": "get_object_info",
-        "description": "Step 3: Finds a specific object from the (filtered) list based on sorting/ranking.",
+        "description": "Step 2: Finds a specific object based on a sorting criteria and returns a specific attribute.",
         "parameters": {
             "type": "object",
             "properties": {
                 "sort_attribute": {
                     "type": "string",
                     "enum": ["area", "length", "confidence", "width", "height"],
-                    "description": "The attribute to use for sorting."
+                    "description": "The attribute to use for ranking/sorting the objects."
                 },
                 "rank_index": {
                     "type": "integer",
@@ -60,30 +42,16 @@ SATELLITE_TOOLS = [
                 },
                 "return_attribute": {
                     "type": "string",
-                    "enum": ["area", "length", "width", "height", "shape", "orientation", "confidence", "mask_id"],
-                    "description": "The attribute to return. Use 'mask_id' to get the ID."
+                    "enum": ["area", "length", "width", "height", "shape", "orientation", "confidence"],
+                    "description": "The actual attribute value to return. If omitted, returns the sort_attribute value."
                 }
             },
             "required": ["sort_attribute", "rank_index"]
         }
     },
     {
-        "name": "select_final_object",
-        "description": "Final Step for Grounding: Selects the specific object ID that answers the user's description.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "mask_id": {
-                    "type": "integer",
-                    "description": "The mask_id of the object to select."
-                }
-            },
-            "required": ["mask_id"]
-        }
-    },
-    {
         "name": "measure_distance",
-        "description": "Measures distance between two objects by their ID/Index.",
+        "description": "Step 2/3: Measures distance between two objects by their ID/Index.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -101,13 +69,13 @@ SATELLITE_TOOLS = [
     },
     {
         "name": "calculator_tool",
-        "description": "Evaluates math expressions.",
+        "description": "Evaluates math expressions (e.g. for averages, sums).",
         "parameters": {
             "type": "object",
             "properties": {
                 "expression": {
                     "type": "string",
-                    "description": "Math expression."
+                    "description": "Math expression (e.g., '(100+200)/5')."
                 }
             },
             "required": ["expression"]
@@ -117,15 +85,13 @@ SATELLITE_TOOLS = [
 
 class SatelliteVQAAgent:
     def __init__(self, vlm_model, vlm_processor, sam_interface=None):
-        self.model = vlm_model # vlm_model has been instantiated in rs_pipeline.py
-        self.processor = vlm_processor # vlm_processor has been instantiated in rs_pipeline.py
+        self.model = vlm_model 
+        self.processor = vlm_processor 
         self.sam = sam_interface 
         self.tools_schema = SATELLITE_TOOLS
         self.tool_map = {
             "detect_objects": self._detect_objects_wrapper,
-            "filter_objects": self._filter_objects_wrapper,
             "get_object_info": self._get_object_info_wrapper,
-            "select_final_object": self._select_final_object_wrapper,
             "measure_distance": self._measure_distance_wrapper,
             "calculator_tool": calculator_tool,
         }
@@ -138,12 +104,10 @@ class SatelliteVQAAgent:
             "count": 0,
             "image_size": (0,0)
         }
-        self.final_selected_id = None
         logger.info("Instantiating SatelliteVQAAgent")
 
     def _reset_state(self):
-        self.sam_state = {"objects": [], "all_objects": [], "masks": None, "image_size": (0,0)}
-        self.final_selected_id = None
+        self.sam_state = {"objects": [], "masks": None, "count": 0, "image_size": (0,0)}
 
     def _detect_objects_wrapper(self, target_class):
         logger.info(f"Running SAM for class: {target_class}")
@@ -151,37 +115,24 @@ class SatelliteVQAAgent:
         
         if result and result.get("metadata"):
             self.sam_state["objects"] = result["metadata"]
-            self.sam_state["all_objects"] = result["metadata"] # Backup
             self.sam_state["masks"] = result["masks"]
+            self.sam_state["count"] = result["count"]
             self.sam_state["image_size"] = result["image_size"]
             
+            # Explicitly tell Qwen that attributes are ready
             return (f"Success. Detected {result['count']} '{target_class}'(s). "
                     f"Indices: 0 to {result['count']-1}. "
-                    "Attributes available: area, shape, orientation, width, height.")
+                    "Attributes available in memory: area, shape, orientation, width, height.")
         else:
             self._reset_state()
             return f"No instances of '{target_class}' were detected."
-
-    def _filter_objects_wrapper(self, region):
-        """Filters the *current* list of objects in sam_state."""
-        current_objs = self.sam_state["objects"]
-        if not current_objs:
-            return "Error: No objects to filter. Detect first."
-            
-        filtered = filter_objects_by_region(current_objs, region, self.sam_state["image_size"])
-        
-        # Update the working list
-        self.sam_state["objects"] = filtered
-        
-        return (f"Filtered by region '{region}'. Remaining objects: {len(filtered)}. "
-                f"You can now use 'get_object_info' on this filtered list.")
-        
             
     def _get_object_info_wrapper(self, sort_attribute, rank_index, return_attribute=None):
         objects = self.sam_state["objects"]
         if not objects:
-            return "Error: No objects detected/remaining."
+            return "Error: No objects detected yet. Please call 'detect_objects' first."
 
+        # Map generic terms to internal keys
         attr_map = {
             "area": "area_m2",
             "length": "height_m", 
@@ -189,26 +140,14 @@ class SatelliteVQAAgent:
             "height": "height_m",
             "confidence": "confidence",
             "shape": "shape",
-            "orientation": "orientation_deg",
-            "mask_id": "mask_id"
+            "orientation": "orientation_deg"
         }
         
         sort_key = attr_map.get(sort_attribute, sort_attribute)
         return_key = attr_map.get(return_attribute, return_attribute) if return_attribute else sort_key
 
         selected_obj, info_str = select_object_by_rank(objects, sort_key, rank_index, return_key)
-        
-        if selected_obj:
-            # Add mask_id to the info string if not asked for, to help the agent know what ID it is
-            if "mask_id" not in info_str and "ID" not in info_str:
-                info_str += f" (Mask ID: {selected_obj.get('mask_id')})"
-                
         return info_str
-
-    def _select_final_object_wrapper(self, mask_id):
-        self.final_selected_id = int(mask_id)
-        return f"Object {mask_id} selected as final answer."
-        
 
     def _measure_distance_wrapper(self, index_1, index_2):
         objects = self.sam_state["objects"]
@@ -226,34 +165,31 @@ class SatelliteVQAAgent:
         tools_json = json.dumps(self.tools_schema, indent=2)
         
         prompt = f"""You are a Satellite Analysis Agent. 
+        You have access to tools to analyze images.
         
         TOOLS:
         {tools_json}
 
-        INSTRUCTIONS:
-        1. For GROUNDING (locating specific objects):
-           - Step 1: 'detect_objects'
-           - Step 2: 'filter_objects' (if location is mentioned like "top left")
-           - Step 3: 'get_object_info' (to find largest/smallest etc.)
-           - Step 4: 'select_final_object' (CRITICAL: Call this with the ID you found)
-        
-        2. For VQA (answering questions):
-           - Use tools to gather info, then answer in the Final Answer.
-           - Numeric: ONLY number.
-           - Binary: ONLY Yes/No.
-           - Semantic: ONLY single word/phrase.
+        CRITICAL OUTPUT RULES:
+        1. If the user asks for a specific attribute (e.g. "What is the shape?"), use 'get_object_info' to retrieve it.
+        2. Do NOT guess attributes. Use the tools.
+        3. FINAL ANSWER FORMAT: 
+           - Numeric questions: Return ONLY the number (e.g. "450.5").
+           - Binary questions: Return ONLY "Yes" or "No".
+           - Semantic questions: Return ONLY the single word or short phrase (e.g., "Rectangle", "North").
+           - Do not write full sentences in the final answer.
 
-        Example Grounding:
-        User: "Find the largest car in the top left."
-        Step 1: detect_objects("car")
-        Step 2: filter_objects("top-left")
-        Step 3: get_object_info("area", -1, "mask_id") -> "Mask ID: 5"
-        Step 4: select_final_object(5)
-        Final Answer: Found object 5.
+        Example Flow:
+        User: "What is the shape of the largest building?"
+        Step 1: {{ "tool": "detect_objects", "arguments": {{ "target_class": "building" }} }}
+        Obs: Success. Detected 5 buildings. Attributes available.
+        Step 2: {{ "tool": "get_object_info", "arguments": {{ "sort_attribute": "area", "rank_index": -1, "return_attribute": "shape" }} }}
+        Obs: rectangle
+        Final Answer: rectangle
         """
         return prompt
 
-    def run(self, image: Image.Image, user_query: str, gsd: float = 1.0, max_steps: int = 6):
+    def run(self, image: Image.Image, user_query: str, gsd: float = 1.0, max_steps: int = 5):
         self.image = image
         self.current_gsd = gsd
         self._reset_state()
@@ -296,25 +232,18 @@ class SatelliteVQAAgent:
                 messages.append({"role": "assistant", "content": [{"type": "text", "text": output_text}]})
                 observation_text = f"Observation from tool '{tool_result['tool']}': {tool_result['result']}"
                 messages.append({"role": "user", "content": [{"type": "text", "text": observation_text}]})
-                
-                # If the agent selected a final object, we can stop early if we want, or let it generate the text confirmation.
-                if tool_result["tool"] == "select_final_object":
-                    logger.info("Agent selected final object. Stopping.")
-                    return {
-                        "final_answer": output_text,
-                        "selected_object_id": self.final_selected_id,
-                        "sam_state_objects": self.sam_state["all_objects"] # Return full list to retrieve bbox
-                    }
-                    
+                logger.info(f"[System]: {observation_text}")
             else:
+                # Final clean up to ensure no punctuation or filler remains if Qwen forgets
+                clean_answer = output_text.strip().rstrip('.')
                 return {
-                    "final_answer": output_text.strip(),
-                    "selected_object_id": self.final_selected_id, # Might be None for VQA
-                    "sam_state_objects": self.sam_state["all_objects"]
+                    "final_answer": clean_answer,
+                    "steps_taken": step + 1
                 }
 
         return {"error": "Max steps reached without final answer."}
-    
+        
+
     def _parse_and_execute_tool(self, text: str):
         try:
             json_match = re.search(r"\{.*\}", text, re.DOTALL)
@@ -331,34 +260,3 @@ class SatelliteVQAAgent:
             logger.info(f"Failed to parse or execute tool: {e}")
             return None
         return None
-
-'''
-if __name__ == "__main__":
-
-    vlm_model, vlm_processor = build_vlm_model()
-    sam_model, sam_processor = build_sam3_model()
-    sam_interface = SAM3Interface(sam_model, sam_processor)
-    
-    agent = SatelliteVQAAgent(vlm_model, vlm_processor, sam_interface)
-    
-    # 3. Mock Data
-    mock_image = Image.new('RGB', (500, 500), color='white')
-    mock_metadata = {
-        "objects": [
-            {"id": "car_1", "class": "car", "area": 12.5, "obb_coords": [10, 20, 10, 20]},
-            {"id": "car_2", "class": "car", "area": 14.0, "obb_coords": [30, 40, 30, 40]},
-            {"id": "bldg_1", "class": "building", "area": 500.0, "obb_coords": [100, 200, 100, 200]}
-        ]
-    }
-    
-    print("Agent setup complete")
-
-'''
-
-
-
-
-
-
-
-
