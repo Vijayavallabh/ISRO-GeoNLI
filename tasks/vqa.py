@@ -158,7 +158,7 @@ class VQATask:
         
         # Run the Multi-Step Tool Agent
 
-        response_dict = self.agent.run(image, augmented_query)
+        response_dict = self.agent.run(image, augmented_query,gsd=gsd)
         
         if "final_answer" in response_dict:
             return response_dict["final_answer"]
