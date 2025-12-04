@@ -10,5 +10,6 @@ __all__ = [
     "build_sam3_model", 
     "VLMInterface",
     "SAM3Interface",
-    "SatelliteVQAAgent"
+    "SatelliteVQAAgent",
+    "GroundingSelectionAgent"
 ]
