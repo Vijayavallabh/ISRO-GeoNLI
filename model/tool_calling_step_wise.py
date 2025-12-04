@@ -102,7 +102,7 @@ class SatelliteVQAAgent:
         self.tools_schema = SATELLITE_TOOLS
         self.tool_map = {
             "comparison_tool": comparison_tool,
-            "distance_tool": distance_tool,
+            "distance_tool": self._distance_tool_wrapper,
             "calculator_tool": calculator_tool,
             "SAM_tool": self._sam_tool_wrapper
         }
@@ -115,6 +115,16 @@ class SatelliteVQAAgent:
     def _sam_tool_wrapper(self, target_class):
         """Wrapper so the tool API only needs target_class."""
         return self.sam.segment_image(self.image, target_class, gsd=self.current_gsd)
+
+    def _distance_tool_wrapper(self, group_a, group_b):
+        """Wrapper to convert pixel distance to meters."""
+        results = distance_tool(group_a, group_b)
+    
+        for item in results:
+            if "distance" in item:
+                item["distance"] = round(item["distance"] * self.current_gsd, 2)
+                item["unit"] = "meters"
+        return results
 
     def _format_system_prompt(self):
         """
@@ -267,4 +277,5 @@ if __name__ == "__main__":
     print("Agent setup complete")
 
 '''
+
 
