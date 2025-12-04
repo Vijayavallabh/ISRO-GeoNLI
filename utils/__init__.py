@@ -10,6 +10,7 @@ __all__ = [
     "GeoCalculator",
     "annotate_image_with_boxes",
     "calculator_tool",
+    "get_attribute_value",
     "select_object_by_rank",
     "calculate_distance_by_indices",
     "filter_objects_by_region",
