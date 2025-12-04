@@ -34,6 +34,11 @@ bitsandbytes
 requests>=2.32.0
 tqdm>=4.66.0
 
+uvicorn 
+fastapi 
+requests
+python-multipart
+
 # Development
 jupyter>=1.1.0
 ipykernel>=6.29.0

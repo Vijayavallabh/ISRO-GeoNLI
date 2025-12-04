@@ -1,254 +1,313 @@
-# Remote Sensing Pipeline
+# ISRO-GeoNLI
 
-A modular pipeline for remote sensing image analysis combining Vision Language Models (VLM) and SAM 3 for:
-- **Image Captioning**: Generate detailed descriptions of aerial imagery
+A production-ready pipeline for remote sensing image analysis using Vision Language Models (VLM) and SAM3:
+- **Image Captioning**: Generate descriptions of aerial/satellite imagery
 - **Object Grounding**: Detect and localize objects with oriented bounding boxes
 - **Visual Question Answering**: Answer numeric, binary, and semantic questions
 
-## Architecture
+**Model**: Fine-tuned Qwen3-VL-8B (`Dinosaur2314/qwen_finetune11`)
+
+## Repository Structure
 
 ```
-remote-sensing-pipeline/
-├── model/
-│   ├── model_builder.py      # Model initialization
-│   ├── vlm_interface.py       # VLM query interface
-│   └── sam3_interface.py      # SAM 3 segmentation interface
-├── tasks/
-│   ├── captioning.py          # Image captioning task
-│   ├── grounding.py           # Object detection/grounding
-│   └── vqa.py                 # Visual question answering
-├── utils/
-│   ├── geo_calculator.py      # Geometric calculations & GSD conversion
-│   └── visualization.py       # Drawing utilities
-├── examples/
-│   └── example_usage.ipynb    # Example notebook
-├── scripts/
-│   └── run_from_json.py       # Run from JSON config
-├── pipeline.py                # Main pipeline orchestrator
-└── README.md
-```
-
-## Installation
-
-### Prerequisites
-- Python 3.10+
-- CUDA-capable GPU (recommended)
-- Access to Qwen and SAM 3 model weights
-
-### Setup
-
-```bash
-# Create environment
-conda create -n rs_pipeline python=3.10
-conda activate rs_pipeline
-
-# Install PyTorch with CUDA support
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-
-# Install dependencies
-pip install transformers accelerate pillow opencv-python matplotlib seaborn
-pip install qwen-vl-utils  # For Qwen3-VL image processing
-pip install -r requirements.txt
-
-# Clone and install
-git clone https://github.com/yourusername/remote-sensing-pipeline.git
-cd remote-sensing-pipeline
+ISRO-GeoNLI/
+├── app_prod.py              # Production FastAPI server (preloads models)
+├── app_dev.py               # Development server (lazy loading)
+├── rs_pipeline.py           # Main RSPipeline class
+├── api_helpers.py           # API utilities
+├── api_models.py            # Pydantic schemas
+│
+├── model/                   # Model interfaces
+│   ├── model_builder.py     # VLM & SAM3 initialization
+│   ├── vlm_interface.py     # Qwen3-VL interface
+│   └── sam3_interface.py    # SAM3 interface
+│
+├── tasks/                   # Task handlers
+│   ├── captioning.py        # Image captioning
+│   ├── grounding.py         # Object detection
+│   └── vqa.py               # Visual QA
+│
+├── utils/                   # Utilities
+│   ├── geo_calc.py          # Geometric calculations
+│   ├── visualization.py     # Annotation tools
+│   └── vqa_output_normalizer.py
+│
+├── Evaluation/              # Evaluation scripts
+├── Finetuning_runs/         # Training scripts
+├── website-backend/         # Web API backend
+└── website-frontend/        # React frontend
 ```
 
 ## Quick Start
 
-### Python API
+### Prerequisites
+- Python 3.10+
+- CUDA-capable GPU (16GB+ VRAM recommended)
+- HuggingFace account with model access
 
-```python
-from PIL import Image
-from pipeline import RSPipeline
+### Installation
 
-# Initialize pipeline (uses Qwen3-VL-8B with transformers by default)
-pipeline = RSPipeline(
-    vlm_model_id="Qwen/Qwen3-VL-8B",
-    sam_model_id="facebook/sam3"
-)
+```bash
+# Clone repository
+git clone https://github.com/Vijayavallabh/ISRO-GeoNLI.git
+cd ISRO-GeoNLI
 
-# Load image
-image = Image.open("aerial_image.jpg")
-gsd = 1.57  # Ground Sample Distance in meters/pixel
+# Create environment
+conda create -n isro_geonli python=3.10
+conda activate isro_geonli
 
-# Task 1: Caption generation
-caption = pipeline.generate_caption(
-    image, 
-    "Generate a detailed caption."
-)
+# Install PyTorch (CUDA 12.4)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 
-# Task 2: Object grounding
-detections = pipeline.ground_objects(
-    image, 
-    "Locate the track field.",
-    gsd=gsd
-)
+# Install dependencies
+pip install -r requirements.txt
 
-# Task 3: Visual QA
-answer = pipeline.answer_question(
-    image,
-    "What is the area of the track field?",
-    detections=detections,
-    question_type="numeric",
-    gsd=gsd
-)
+# HuggingFace authentication
+huggingface-cli login
 ```
 
-### JSON Configuration
+### Run Production Server
 
-Create a `query.json` file:
+```bash
+# Linux/Mac
+./run_prod.sh
 
+# Windows
+uvicorn app_prod:app --host 0.0.0.0 --port 8080
+
+# Development mode (with auto-reload)
+uvicorn app_dev:app --host 0.0.0.0 --port 8000 --reload
+```
+
+The server preloads models on startup (takes 2-3 minutes) and runs at `http://localhost:8080`.
+
+### Test API
+
+```bash
+# Health check
+curl http://localhost:8080/health
+
+# Simple query
+curl -X POST http://localhost:8080/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the area of the building?", "image_url": "https://example.com/image.jpg"}'
+```
+
+## API Endpoints
+
+### POST /process
+Structured request matching `query.json` schema.
+
+**Request:**
 ```json
 {
   "input_image": {
-    "image_id": "sample.png",
+    "image_id": "sample_001",
     "image_url": "https://example.com/image.jpg",
-    "metadata": {
-      "width": 512,
-      "height": 512,
-      "spatial_resolution_m": 1.57
-    }
+    "metadata": {"spatial_resolution_m": 1.57}
   },
   "queries": {
-    "caption_query": {
-      "instruction": "Generate a detailed caption."
-    },
-    "grounding_query": {
-      "instruction": "Locate the track field."
-    },
+    "caption_query": {"instruction": "Describe the image."},
+    "grounding_query": {"instruction": "Locate all buildings."},
     "attribute_query": {
       "binary": {"instruction": "Is there any aeroplane?"},
-      "numeric": {"instruction": "What is the area of the track field?"},
-      "semantic": {"instruction": "What is the color of the building?"}
+      "numeric": {"instruction": "What is the area?"},
+      "semantic": {"instruction": "What color is the building?"}
     }
   }
 }
 ```
 
-Run the pipeline:
+### POST /query
+Auto-classifies query type using LLM.
 
-```bash
-python scripts/run_from_json.py --input query.json --output results.json
+**Request:**
+```json
+{
+  "query": "Count the cars in the parking lot",
+  "image_url": "https://example.com/parking.jpg"
+}
 ```
 
-## Features
+## Pipeline Architecture
 
-### 1. Image Captioning
-- **Generate-then-Compress Strategy**: Creates detailed draft then compresses to target length
-- **High BLEU Scores**: Optimized for caption quality metrics
-- Targets ~60 words while maintaining detail
+### High-Level Task Flows
 
-### 2. Object Grounding
-- **Two-Stage Pipeline**: 
-  1. Coarse detection with VLM (full context)
-  2. Fine-grained refinement with SAM 3 (cropped context)
-- **Oriented Bounding Boxes**: Handles rotated objects
-- **Real-world Measurements**: Automatic area calculation in m²
-- **De-duplication**: Prevents duplicate detections
-
-### 3. Visual Question Answering
-- **Numeric Questions**: Area, distance, counting
-- **Binary Questions**: Yes/No answers
-- **Semantic Questions**: Color, material, activity
-- **Dynamic Grounding**: Automatically detects missing objects
-- **Metadata-Driven**: Uses detection metadata to reduce hallucination
-
-## Pipeline Flow
-
+#### 1. Image Captioning
 ```
-Input Image + Query
-        ↓
-    [VLM] ← Extract target classes
-        ↓
-    Coarse Detection (HBB)
-        ↓
-    [SAM 3] ← Refine each box
-        ↓
-    Oriented Bounding Boxes (OBB)
-        ↓
-    De-duplication
-        ↓
-    Metadata Calculation
-        ↓
-    [VLM] ← Answer questions
-        ↓
-    Results
+Input: Image + Instruction
+         ↓
+    VLM Interface (Qwen3-VL)
+         ↓
+    Generate Caption
+         ↓
+    Output: Caption String
+```
+
+
+#### 2. Object Grounding (Two-Stage)
+```
+Input: Image + Query ("Locate all airports")
+         ↓
+Stage 1: VLM Coarse Detection
+  • Parse query → extract target classes
+         ↓
+Stage 2: SAM3 Call
+  • SAM3 segmentation → precise masks
+  • Extract oriented bounding boxes (OBB)
+  • Format: [x1,y1, x2,y2, x3,y3, x4,y4]
+         ↓
+Post-Processing
+  • De-duplication (distance-based filtering)
+  • Area calculation (pixel_area × gsd²)
+  • Assign unique object IDs
+         ↓
+Output: [{object-id, obbox, area_m²}, ...]
+```
+
+#### 3. Visual Question Answering (Smart Router)
+```
+Input: Image + Question
+         ↓
+    Question Type Classification
+    (Binary / Numeric / Semantic)
+         ↓
+    ┌─────────┴──────────┐
+    ↓                    ↓
+Binary/Semantic      Numeric
+(Direct VLM)        (Grounding-based)
+    ↓                    ↓
+    |              Auto-Grounding
+    |              (if not provided)
+    |                    ↓
+    |              Extract Metadata
+    |              (count, areas)
+    |                    ↓
+    |              VLM with Metadata
+    └─────────┬──────────┘
+              ↓
+    Answer Normalization
+    • Binary: "Yes"/"No"
+    • Numeric: number + unit
+    • Semantic: text
+              ↓
+    Output: Answer String
+```
+
+## Python API Usage
+
+```python
+from PIL import Image
+from rs_pipeline import RSPipeline
+
+# Initialize
+pipeline = RSPipeline(
+    vlm_model_id="Dinosaur2314/qwen_finetune11",
+    sam_model_id="facebook/sam3"
+)
+
+image = Image.open("satellite.jpg")
+gsd = 1.57  # Ground Sample Distance (meters/pixel)
+
+# Captioning
+caption = pipeline.generate_caption(image, "Describe this aerial image.")
+
+# Grounding
+detections = pipeline.ground_objects(image, "Locate all airports", score_threshold=0.4)
+
+# VQA
+answer = pipeline.answer_question(
+    image, 
+    "How many aircraft are visible?",
+    question_type="numeric",
+    gsd=gsd
+)
 ```
 
 ## Configuration
 
 ### Model Selection
-- **VLM**: Default is Qwen3-VL-8B (uses transformers, no vLLM required)
-- **SAM**: Uses facebook/sam3 (ensure HuggingFace access)
+```python
+# Fine-tuned model (default)
+pipeline = RSPipeline(vlm_model_id="Dinosaur2314/qwen_finetune11")
 
-### GSD (Ground Sample Distance)
-- Critical for accurate area/distance measurements
-- Specify in meters per pixel
-- Typically 0.5-2.0 m for aerial imagery
+# Base model
+pipeline = RSPipeline(vlm_model_id="Qwen/Qwen3-VL-8B")
+```
 
-### Thresholds
-- **SAM Score Threshold**: Default 0.4 (adjust for precision/recall trade-off)
-- **De-duplication Distance**: Default 20 pixels
-
-## Examples
-
-See `examples/example_usage.ipynb` for comprehensive examples covering:
-- Basic usage of all three tasks
-- Working with different image sources
-- Customizing parameters
-- Interpreting results
+### Parameters
+- **score_threshold**: Confidence threshold for grounding (default: 0.4)
+- **gsd**: Ground Sample Distance in meters/pixel (required for area calculations)
+- **question_type**: "binary", "numeric", or "semantic" for VQA
 
 ## Troubleshooting
 
 ### CUDA Out of Memory
-```python
-pipeline = RSPipeline(gpu_memory_utilization=0.5)  # Reduce memory usage
-```
-
-### Model Loading Issues
-- Ensure you have access to the model on HuggingFace
-- Check that `trust_remote_code=True` is set (handled automatically)
-- Verify transformers version: `pip install transformers>=4.40.0`
-
-### SAM 3 Access Denied
-Request access to the [SAM 3 HuggingFace repo](https://huggingface.co/facebook/sam3) and authenticate:
 ```bash
-huggingface-cli login
+# Monitor GPU memory
+nvidia-smi -l 1
+
+# Clear cache
+python -c "import torch; torch.cuda.empty_cache()"
+
+# Use CPU fallback (slower)
+pipeline = RSPipeline(device="cpu")
 ```
+
+### Model Access Denied
+```bash
+# Login to HuggingFace
+huggingface-cli login
+
+# Request access to gated models
+# Visit https://huggingface.co/facebook/sam3
+```
+
+### Port Already in Use
+```bash
+# Windows
+netstat -ano | findstr :8080
+taskkill /PID <PID> /F
+
+# Linux/Mac
+lsof -i :8080
+kill -9 <PID>
+```
+
+### Slow Inference
+- Use `app_prod.py` (preloads models) instead of `app_dev.py`
+- Reduce image resolution before processing
+- Increase `score_threshold` for faster grounding
+
+### No Grounding Detections
+- Lower `score_threshold` (default: 0.4 → try 0.2)
+- Verify query phrasing: "Locate all X" instead of "Show me X"
+- Ensure image quality (RGB mode, size > 512x512)
+
+## License
+
+- Pipeline Code: MIT License
+- Qwen3-VL: Apache 2.0
+- SAM3: [SAM License](https://github.com/facebookresearch/segment-anything/blob/main/LICENSE)
 
 ## Citation
 
-If you use this pipeline, please cite the underlying models:
-
 ```bibtex
-@article{qwen3vl,
-  title={Qwen3-VL: Towards Versatile Vision Language Models},
+@article{qwen3vl2024,
+  title={Qwen3-VL: Towards Versatile Vision-Language Understanding},
   author={Qwen Team},
   year={2024}
 }
 
 @article{sam3,
   title={Segment Anything Model 3},
-  author={Meta AI},
+  author={Meta AI Research},
   year={2024}
 }
 ```
 
-## License
-
-This project follows the licenses of its dependencies:
-- SAM 3: [SAM License](https://github.com/facebookresearch/sam3/blob/main/LICENSE)
-- Qwen: [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)
-
-## Contributing
-
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
-
 ## Contact
 
-For questions or issues, please open a GitHub issue.
+- Repository: [github.com/Vijayavallabh/ISRO-GeoNLI](https://github.com/Vijayavallabh/ISRO-GeoNLI)
+- Issues: [GitHub Issues](https://github.com/Vijayavallabh/ISRO-GeoNLI/issues)
+

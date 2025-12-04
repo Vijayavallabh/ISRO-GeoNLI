@@ -123,7 +123,7 @@ async def process_structured(request: StructuredRequest, include_annotations: bo
     Process structured request matching query.json schema.
     Executes each query type individually through the pipeline.
     """
-    pipeline = get_pipeline(vlm_model_id="Dinosaur2314/qwen_finetune11")
+    pipeline = get_pipeline()
 
     # Load image
     image = get_image_from_input(request.input_image)
