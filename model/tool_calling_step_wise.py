@@ -167,11 +167,8 @@ class SatelliteVQAAgent:
             return "Error: No objects detected yet."
             
         dist_val = calculate_distance_by_indices(objects, index_1, index_2)
-        
-        if dist_val is None:
-            return "Error: Invalid indices provided."
-            
-        return f"The Euclidean distance between Object {index_1} and Object {index_2} is {dist_val:.2f} meters."
+        dist_meters = dist_pixels * self.current_gsd
+        return f"Distance: {dist_meters:.2f} meters."
 
     def _format_system_prompt(self):
         tools_json = json.dumps(self.tools_schema, indent=2)
@@ -293,6 +290,7 @@ if __name__ == "__main__":
     print("Agent setup complete")
 
 '''
+
 
 
 
