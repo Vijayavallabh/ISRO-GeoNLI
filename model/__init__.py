@@ -9,5 +9,6 @@ __all__ = [
     "build_vlm_model",
     "build_sam3_model", 
     "VLMInterface",
-    "SAM3Interface"
+    "SAM3Interface",
+    "SatelliteVQAAgent"
 ]
