@@ -81,20 +81,6 @@ class VQATask:
             question_type: 'numeric', 'binary', or 'semantic'
         """
         return self._answer_integrated(image, query, gsd, question_type)
-        
-'''
-    def answer_numeric_question(self, image, query, gsd=1.0):
-        """Entry point for numeric questions."""
-        return self._answer_integrated(image, query, gsd, "numeric")
-
-    def answer_binary_question(self, image, query, gsd=1.0):
-        """Entry point for binary questions."""
-        return self._answer_integrated(image, query, gsd, "binary")
-
-    def answer_semantic_question(self, image, query, gsd=1.0):
-        """Entry point for semantic/descriptive questions."""
-        return self._answer_integrated(image, query, gsd, "semantic")
-'''
 
     # --- Core Routing Logic ---
 
@@ -170,7 +156,7 @@ class VQATask:
         
         # Run the Multi-Step Tool Agent
 
-        response_dict = self.agent.run(image, augmented_query)
+        response_dict = self.agent.run(image, augmented_query, gsd=gsd)
         
         if "final_answer" in response_dict:
             return response_dict["final_answer"]
