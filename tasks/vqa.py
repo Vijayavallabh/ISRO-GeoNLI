@@ -210,4 +210,13 @@ class VQATask:
         if visual_note:
             user_prompt = f"Context: {visual_note}\n{user_prompt}"
 
-        return self.vlm.query(visual_input, user_prompt, system_prompt=sys_prompt, max_tokens=128)
+        response = self.vlm.query(visual_input, user_prompt, system_prompt=sys_prompt, max_tokens=128)
+        try:
+            parsed = json.loads(response)
+            response = parsed['answer']
+        except (json.JSONDecodeError, KeyError):
+            match = re.search(r'answer["\']?\s*:\s*["\']([^"\']+)["\']', response, re.IGNORECASE)
+            if match:
+                response = match.group(1)
+                
+        return response
