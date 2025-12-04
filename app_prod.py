@@ -94,7 +94,7 @@ def root():
 @app.get("/health")
 def health_check():
     """Health check endpoint."""
-    global _pipeline
+    _pipeline = get_pipeline()
     is_ready = _pipeline is not None
     
     status = {

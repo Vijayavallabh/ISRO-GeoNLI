@@ -11,6 +11,7 @@ from fastapi import HTTPException
 import requests
 
 from rs_pipeline import RSPipeline
+import re
 
 
 # ============================================================================
