@@ -5,8 +5,6 @@ A production-ready pipeline for remote sensing image analysis using Vision Langu
 - **Object Grounding**: Detect and localize objects with oriented bounding boxes
 - **Visual Question Answering**: Answer numeric, binary, and semantic questions
 
-**Model**: Fine-tuned Qwen3-VL-8B (Weights are provided in the zip file)
-
 ## Repository Structure
 
 ```
@@ -43,7 +41,7 @@ ISRO-GeoNLI/
 ### Prerequisites
 - Python 3.10+
 - CUDA-capable GPU (36GB+ VRAM recommended)
-- HuggingFace account with model access
+- HuggingFace account with SAM 3 access
 
 ### Installation
 
@@ -73,9 +71,6 @@ huggingface-cli login
 
 # Windows
 uvicorn app_prod:app --host 0.0.0.0 --port 8080
-
-# Development mode (with auto-reload)
-uvicorn app_dev:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 The server preloads models on startup (takes 2-3 minutes) and runs at `http://localhost:8080`.
@@ -95,7 +90,7 @@ curl -X POST http://localhost:8080/query \
 ## API Endpoints
 
 ### POST /process
-Structured request matching `query.json` schema.
+Structured request matching `query.json` schema. Please use this endpoint for evaluation
 
 **Request:**
 ```json
@@ -118,7 +113,7 @@ Structured request matching `query.json` schema.
 ```
 
 ### POST /query
-Auto-classifies query type using LLM.
+Auto-classifies query type using LLM. This is used internally in the chat app.
 
 **Request:**
 ```json
@@ -127,71 +122,7 @@ Auto-classifies query type using LLM.
   "image_url": "https://example.com/parking.jpg"
 }
 ```
-
-## Pipeline Architecture
-
-### High-Level Task Flows
-
-#### 1. Image Captioning
-```
-Input: Image + Instruction
-         ↓
-    VLM Interface (Qwen3-VL)
-         ↓
-    Generate Caption
-         ↓
-    Output: Caption String
-```
-
-
-#### 2. Object Grounding (Two-Stage)
-```
-Input: Image + Query ("Locate all airports")
-         ↓
-Stage 1: VLM Coarse Detection
-  • Parse query → extract target classes
-         ↓
-Stage 2: SAM3 Call
-  • SAM3 segmentation → precise masks
-  • Extract oriented bounding boxes (OBB)
-  • Format: [x1,y1, x2,y2, x3,y3, x4,y4]
-         ↓
-Post-Processing
-  • De-duplication (distance-based filtering)
-  • Area calculation (pixel_area × gsd²)
-  • Assign unique object IDs
-         ↓
-Output: [{object-id, obbox, area_m²}, ...]
-```
-
-#### 3. Visual Question Answering (Smart Router)
-```
-Input: Image + Question
-         ↓
-    Question Type Classification
-    (Binary / Numeric / Semantic)
-         ↓
-    ┌─────────┴──────────┐
-    ↓                    ↓
-Binary/Semantic      Numeric
-(Direct VLM)        (Grounding-based)
-    ↓                    ↓
-    |              Auto-Grounding
-    |              (if not provided)
-    |                    ↓
-    |              Extract Metadata
-    |              (count, areas)
-    |                    ↓
-    |              VLM with Metadata
-    └─────────┬──────────┘
-              ↓
-    Answer Normalization
-    • Binary: "Yes"/"No"
-    • Numeric: number + unit
-    • Semantic: text
-              ↓
-    Output: Answer String
-```
+Please refer report (Team_46.pdf) for the architecture details.
 
 ## License
 
