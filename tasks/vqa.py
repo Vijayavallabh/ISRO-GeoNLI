@@ -7,6 +7,7 @@ import torch
 from collections import defaultdict
 from utils.visualization import annotate_image_with_boxes
 from model.tool_calling_step_wise import SatelliteVQAAgent
+import json
 
 import logging
 
