@@ -50,7 +50,7 @@ def move_to_device(batch, device):
 def collate_batch(batch_data: List[Dict], processor) -> Dict:
     texts = [item["text"] for item in batch_data]
 
-    # --- FIX: Load images here (Just-In-Time) to save RAM ---
+    # FIX: Load images here (Just-In-Time) to save RAM
     images = []
     for item in batch_data:
         img_path = item["image_path"] # Changed key from 'image' to 'image_path'
@@ -70,7 +70,7 @@ def run_batch_inference(processor, model, batch_data: List[Dict]) -> List[str]:
     if len(batch_data) == 0:
         return []
 
-    # --- FIX: Move to device explicitly ---
+    # FIX: Move to device explicitly
     inputs = collate_batch(batch_data, processor)
     inputs = move_to_device(inputs, model.device)
 
@@ -79,13 +79,13 @@ def run_batch_inference(processor, model, batch_data: List[Dict]) -> List[str]:
                 **inputs,
                 max_new_tokens=100,
                 pad_token_id=processor.tokenizer.pad_token_id,
-                eos_token_id=processor.tokenizer.eos_token_id, # Explicitly set this
+                eos_token_id=processor.tokenizer.eos_token_id, 
                 do_sample=False,
                 use_cache=True
                 )
 
     results = []
-    # --- FIX: Handle input lengths correctly for batch generation ---
+    # Handle input lengths correctly for batch generation
     input_ids_len = inputs["input_ids"].shape[1]
 
     for i, output in enumerate(outputs):

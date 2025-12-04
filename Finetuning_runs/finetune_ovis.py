@@ -7,13 +7,12 @@ import logging
 from typing import Dict, Sequence
 import torch.nn.functional as F
 import os
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from trl import SFTTrainer, SFTConfig
 
-# Define constants (from ovis/util/constants.py and model config)
+# Define constants 
 IGNORE_ID = -100
 IMAGE_TOKEN = "<image>"
 
@@ -21,9 +20,8 @@ IMAGE_TOKEN = "<image>"
 IMAGE_TOKEN_ID = 151665
 VISUAL_INDICATOR_IDS = [151666, 151667, 151668, 151669, 151670]
 
-# ============================================================================
+
 # 1. MODEL SETUP
-# ============================================================================
 
 logger.info("Loading model...")
 
@@ -125,10 +123,8 @@ SINGLE_IMAGE_MIN_PIXELS = 448 * 448
 SINGLE_IMAGE_MAX_PIXELS = 1792 * 1344
 MULTIMODAL_MAX_LENGTH = 4096
 
-# ============================================================================
-# 3. PREPROCESSING FUNCTION
-# ============================================================================
 
+# 3. PREPROCESSING FUNCTION
 def preprocess_function(sample, idx):
     """
     Preprocess each sample following the official Ovis CaptionDataset pattern.
@@ -408,9 +404,8 @@ class DataCollatorForMultimodalDataset:
             labels=labels
         )
 
-# ============================================================================
+
 # 5. TRAINING CONFIGURATION
-# ============================================================================
 
 training_args = SFTConfig(
     output_dir="./ovis2.5-vrsbench-lora",
@@ -440,9 +435,7 @@ training_args = SFTConfig(
     max_length=1024,
 )
 
-# ============================================================================
 # 6. TRAINER SETUP
-# ============================================================================
 
 trainer = SFTTrainer(
     model=model,

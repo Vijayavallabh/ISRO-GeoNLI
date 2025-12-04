@@ -15,7 +15,7 @@ from PIL import Image
 from typing import Dict, List, Any
 import random
 
-# --- CHANGED: Updated Dataset Class to handle multiple sources ---
+#  CHANGED: Updated Dataset Class to handle multiple sources
 class VRSDataset(Dataset):    
     def __init__(self, dataset_configs: List[Dict[str, str]], processor, max_samples=None): 
         """
