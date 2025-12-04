@@ -107,13 +107,14 @@ class SatelliteVQAAgent:
             "SAM_tool": self._sam_tool_wrapper
         }
         self.image = None
+        self.current_gsd = 1.0
 
         logger.info("Instantiating SatelliteVQAAgent")
 
 
     def _sam_tool_wrapper(self, target_class):
         """Wrapper so the tool API only needs target_class."""
-        return self.sam.segment_image(self.image, target_class)
+        return self.sam.segment_image(self.image, target_class, gsd=self.current_gsd)
 
     def _format_system_prompt(self):
         """
@@ -137,11 +138,12 @@ class SatelliteVQAAgent:
         
         return prompt
 
-    def run(self, image: Image.Image, user_query: str, metadata: Dict = {}, max_steps: int = 5):
+    def run(self, image: Image.Image, user_query: str, gsd: float = 1.0, metadata: Dict = {}, max_steps: int = 5):
         """
         Executes the agent loop with Multi-Step capability (ReAct Loop).
         """
         self.image = image
+        self.current_gsd = gsd
         system_prompt_text = self._format_system_prompt()
         
         # 1. Initialize History
@@ -265,3 +267,4 @@ if __name__ == "__main__":
     print("Agent setup complete")
 
 '''
+
