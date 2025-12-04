@@ -8,8 +8,33 @@ ATTRIBUTE_MAP = {
     "orientation": "orientation_deg",
     "shape": "shape",
     "confidence": "confidence",
-    "length": "height_m" 
+    "length": "height_m",  
+    "perimeter": None,  
 }
+
+def get_attribute_value(obj: Dict, attribute: str) -> Union[float, str, None]:
+    """
+    Safely retrieve attribute from object metadata.
+    Handles computed attributes and missing data.
+    """
+    if attribute not in ATTRIBUTE_MAP:
+        return None
+    
+    mapped_key = ATTRIBUTE_MAP[attribute]
+    
+    # Direct attribute lookup
+    if mapped_key and mapped_key in obj:
+        return obj[mapped_key]
+    
+    # Computed attributes
+    if attribute == "perimeter":
+        # Approximate perimeter from width/height (rectangle assumption)
+        w = obj.get("width_m", 0)
+        h = obj.get("height_m", 0)
+        return 2 * (w + h) if w and h else None
+    
+    return None
+    
 
 def select_object_by_rank(
     objects_list: List[Dict], 
@@ -223,6 +248,7 @@ def calculator_tool(expression: str) -> Union[float, str]:
 def get_available_attributes() -> List[str]:
     """Returns list of all queryable attributes."""
     return list(ATTRIBUTE_MAP.keys())
+
 
 
 
