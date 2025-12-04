@@ -12,5 +12,6 @@ __all__ = [
     "calculator_tool",
     "select_object_by_rank",
     "calculate_distance_by_indices",
-    "filter_objects_by_region"
+    "filter_objects_by_region",
+    "get_available_attributes"
 ]
