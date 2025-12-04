@@ -18,7 +18,8 @@ class GeoCalculator:
     def pixel_area_to_meter_sq(self, pixel_area):
         return pixel_area * (self.gsd ** 2)
 
-    def extract_metadata_from_mask(self, mask_bool):
+    def extract_metadata_from_mask(self, mask_bool, gsd = None):
+        current_gsd = gsd if gsd is not None else self.gsd
         mask_uint8 = mask_bool.astype(np.uint8) * 255
         contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
@@ -43,10 +44,11 @@ class GeoCalculator:
         shape = shape_map.get(num_vertices, "circle" if num_vertices > 6 else "irregular")
 
         pixel_area = np.sum(mask_bool > 0)
-        area_m2 = self.pixel_area_to_meter_sq(pixel_area)
+        area_m2 = pixel_area * (current_gsd ** 2)
+        
         (cx, cy), (w, h), angle = rect
-        width_m = self.pixel_to_meter(max(w, h))
-        height_m = self.pixel_to_meter(min(w, h))
+        width_m = max(w, h) * current_gsd
+        height_m = min(w, h) * current_gsd
         
         orientation = float(angle) if angle >= 0 else float(angle + 180)
         
