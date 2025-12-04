@@ -1,16 +1,150 @@
-# React + Vite
+# Website Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite web interface for the ISRO-GeoNLI remote sensing image analysis platform.
 
-Currently, two official plugins are available:
+## Overview
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+A modern, responsive web application that provides:
+- User authentication (login/signup)
+- Image upload and query interface
+- Real-time chat with ISRO-GeoNLI API
+- Session and message history management
+- Annotated image visualization
 
-## React Compiler
+**Tech Stack:**
+- React 18.2
+- Vite 7.2 (build tool)
+- React Router 7.9 (navigation)
+- Ant Design 6.0 (UI components)
+- Axios (HTTP client)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Architecture
 
-## Expanding the ESLint configuration
+```
+website-frontend/
+├── src/
+│   ├── main.jsx         # Application entry point
+│   ├── App.jsx          # Root component with routing
+│   ├── login.jsx        # Authentication page
+│   ├── home.jsx         # Main chat interface
+│   ├── test.jsx         # Testing/demo page
+│   ├── assets/          # Images and static files
+│   └── utils/
+│       └── style.jsx    # Shared styles
+├── public/              # Static assets
+├── package.json         # Dependencies
+└── vite.config.js       # Vite configuration
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Prerequisites
+
+- Node.js v20+ (LTS recommended)
+- npm or yarn package manager
+- Backend server running (website-backend)
+
+## Installation
+
+### Step 1: Navigate to Frontend Directory
+
+```bash
+cd website-frontend
+```
+
+### Step 2: Install Dependencies
+
+```bash
+npm install
+```
+
+### Step 3: Configure Environment
+
+Create a `.env` file in the `website-frontend` directory:
+
+```env
+VITE_API_URL=http://localhost:8001/api
+```
+
+## Running the Application
+
+### Development Mode
+
+```bash
+npm run dev
+```
+
+- Vite dev server starts at `http://localhost:5173`
+- Hot Module Replacement (HMR) enabled
+- Instant updates on file save
+
+### Production Build
+
+```bash
+npm run build
+npm run preview
+```
+
+Build output is in `dist/` directory.
+
+## Main Components
+
+**App.jsx** - Root component with React Router
+
+**login.jsx** - User authentication interface
+
+**home.jsx** - Main application interface with image upload and query submission
+
+**test.jsx** - Testing/demo component
+
+## API Integration
+
+The frontend communicates with the backend API at `http://localhost:8001/api`:
+
+**Endpoints:**
+- `POST /login` - User authentication
+- `POST /signup` - User registration
+- `POST /chat` - Submit query with image
+- `GET /sessions` - Get chat sessions
+- `GET /messages/{session_id}` - Get messages
+
+**Authentication:**
+```javascript
+const token = localStorage.getItem('token');
+axios.post(url, data, {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+```
+
+## Configuration
+
+### vite.config.js
+
+```javascript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+})
+```
+
+
+## Scripts
+
+```bash
+npm run dev      # Start dev server
+npm run build    # Production build
+npm run preview  # Preview prod build
+npm run lint     # Lint code
+```
+
+## Dependencies
+
+- `react` (18.2.0) - UI library
+- `vite` (7.2.4) - Build tool
+- `react-router-dom` (7.9.6) - Navigation
+- `antd` (6.0.0) - Component library
+- `axios` (1.13.2) - API client
+
+## License
+
+Part of the ISRO-GeoNLI project.
