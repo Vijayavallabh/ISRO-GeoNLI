@@ -7,9 +7,8 @@ from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
 from transformers import Sam3Model, Sam3Processor
 from qwen_vl_utils import process_vision_info
 from utils.geo_calc import GeoCalculator 
-
 from model.model_builder import build_vlm_model, build_sam3_model
-from utils.satellite_vqa_tools import comparison_tool, distance_tool, calculator_tool
+from utils.satellite_vqa_tools import select_object_by_rank, calculate_distance_by_indices, calculator_tool
 
 import logging
 
@@ -17,51 +16,54 @@ logger = logging.getLogger(__name__)
 
 SATELLITE_TOOLS = [
     {
-        "name": "comparison_tool",
-        "description": "Sorts a list of object ID and value pairs. Useful for finding largest/smallest objects or ranking objects by a specific attribute (area, height, etc.).",
+        "name": "detect_objects",
+        "description": "Step 1: Detects objects in the image using SAM3. MUST be called before any comparison or measurement tools.",
         "parameters": {
             "type": "object",
             "properties": {
-                "data_pairs": {
-                    "type": "array",
-                    "items": {
-                        "type": "array",
-                        "description": "Tuple of [object_id, value]"
-                    },
-                    "description": "List of (id, value) tuples to sort."
-                },
-                "descending": {
-                    "type": "boolean",
-                    "description": "True for largest-first, False for smallest-first. Default False."
+                "target_class": {
+                    "type": "string",
+                    "description": "The object class to detect (e.g., 'building', 'car', 'ship')."
                 }
             },
-            "required": ["data_pairs"]
+            "required": ["target_class"]
         }
     },
     {
-        "name": "distance_tool",
-        "description": "Calculates Euclidean distances between two groups of objects given their bounding boxes.",
+        "name": "get_object_info",
+        "description": "Step 2: filters or finds specific objects based on an attribute. Use this to find 'the largest building', 'second smallest car', etc.",
         "parameters": {
             "type": "object",
             "properties": {
-                "group_a": {
-                    "type": "array",
-                    "items": {
-                        "type": "array",
-                        "description": "Tuple of [id, x1, x2, y1, y2]"
-                    },
-                    "description": "First list of objects with bounding box coordinates."
+                "attribute": {
+                    "type": "string",
+                    "enum": ["area", "length", "confidence", "width", "height"],
+                    "description": "The attribute to sort/filter by."
                 },
-                "group_b": {
-                    "type": "array",
-                    "items": {
-                        "type": "array",
-                        "description": "Tuple of [id, x1, x2, y1, y2]"
-                    },
-                    "description": "Second list of objects to compare against."
+                "rank_index": {
+                    "type": "integer",
+                    "description": "The rank to select (1-based index). 1 = smallest/first, -1 = largest/last, 2 = second smallest, -2 = second largest."
                 }
             },
-            "required": ["group_a", "group_b"]
+            "required": ["attribute", "rank_index"]
+        }
+    },
+    {
+        "name": "measure_distance",
+        "description": "Step 2/3: Measures the distance between two specific objects identified by their ID or rank index from the detection list.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "index_1": {
+                    "type": "integer",
+                    "description": "The index of the first object (0-based) from the detected list."
+                },
+                "index_2": {
+                    "type": "integer",
+                    "description": "The index of the second object (0-based) from the detected list."
+                }
+            },
+            "required": ["index_1", "index_2"]
         }
     },
     {
@@ -77,20 +79,6 @@ SATELLITE_TOOLS = [
             },
             "required": ["expression"]
         }
-    },
-    {
-        "name": "SAM_tool",
-        "description": "Uses SAM3 to detect objects in the image. Takes in a noun phrase as an input in the target_class argument and returns mask id, oriented bounding box, confidence, and area of the object for each instance of the object in the image.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "target_class": {
-                    "type": "string",
-                    "description": "The target class to use as a text prompt for SAM3."
-                }
-            },
-            "required": ["target_class"]
-        }
     }
 ]
 
@@ -101,81 +89,130 @@ class SatelliteVQAAgent:
         self.sam = sam_interface 
         self.tools_schema = SATELLITE_TOOLS
         self.tool_map = {
-            "comparison_tool": comparison_tool,
-            "distance_tool": self._distance_tool_wrapper,
+            "detect_objects": self._detect_objects_wrapper,
+            "get_object_info": self._get_object_info_wrapper,
+            "measure_distance": self._measure_distance_wrapper,
             "calculator_tool": calculator_tool,
-            "SAM_tool": self._sam_tool_wrapper
         }
         self.image = None
         self.current_gsd = 1.0
 
+        self.sam_state = {
+            "objects": [],    
+            "masks": None,   
+            "count": 0,
+            "image_size": (0,0)
+        }
         logger.info("Instantiating SatelliteVQAAgent")
 
+    def _reset_state(self):
+        """Clears the SAM state for a new query."""
+        self.sam_state = {
+            "objects": [],
+            "masks": None,
+            "count": 0,
+            "image_size": (0,0)
+        }
 
-    def _sam_tool_wrapper(self, target_class):
-        """Wrapper so the tool API only needs target_class."""
-        return self.sam.segment_image(self.image, target_class, gsd=self.current_gsd)
-
-    def _distance_tool_wrapper(self, group_a, group_b):
-        """Wrapper to convert pixel distance to meters."""
-        pixel_results = distance_tool(group_a, group_b)
-    
-        for item in pixel_results:
-            pixel_dist = item["distance"]
-            item["distance"] = round(pixel_dist * self.current_gsd, 2)
-            item["unit"] = "meters"
+    def _detect_objects_wrapper(self, target_class):
+        """
+        Runs SAM and populates self.sam_state.
+        """
+        logger.info(f"Running SAM for class: {target_class}")
+        result = self.sam.segment_image(self.image, target_class, gsd=self.current_gsd)
+        
+        if result and result.get("metadata"):
+            # Update State
+            self.sam_state["objects"] = result["metadata"]
+            self.sam_state["masks"] = result["masks"]
+            self.sam_state["count"] = result["count"]
+            self.sam_state["image_size"] = result["image_size"]
             
-        return pixel_results
+            # Return a summary to Qwen (not the raw data)
+            return f"Success. Detected {result['count']} instances of '{target_class}'. These are now stored in memory with indices 0 to {result['count']-1}."
+        else:
+            self._reset_state()
+            return f"No instances of '{target_class}' were detected."
+            
+    def _get_object_info_wrapper(self, attribute, rank_index):
+        """
+        Uses self.sam_state implicitly.
+        Qwen asks for: attribute='area', rank_index=-2 (2nd largest).
+        """
+        objects = self.sam_state["objects"]
+        if not objects:
+            return "Error: No objects detected yet. Please call 'detect_objects' first."
+
+        # Map 'area' to specific key if needed, or use directly
+        attr_map = {
+            "area": "area_m2",
+            "length": "height_m", # Assuming height is length in OBB
+            "width": "width_m",
+            "confidence": "confidence"
+        }
+        key = attr_map.get(attribute, attribute)
+
+        # Call helper logic (see satellite_vqa_tools.py)
+        selected_obj, info_str = select_object_by_rank(objects, key, rank_index)
+        
+        return info_str
+
+    def _measure_distance_wrapper(self, index_1, index_2):
+        """
+        Uses self.sam_state implicitly.
+        Qwen asks for: index_1=0, index_2=3.
+        """
+        objects = self.sam_state["objects"]
+        if not objects:
+            return "Error: No objects detected yet."
+            
+        dist_val = calculate_distance_by_indices(objects, index_1, index_2)
+        
+        if dist_val is None:
+            return "Error: Invalid indices provided."
+            
+        return f"The Euclidean distance between Object {index_1} and Object {index_2} is {dist_val:.2f} meters."
 
     def _format_system_prompt(self):
-        """
-        Creates the system prompt injecting the tool definitions and image metadata.
-        """
         tools_json = json.dumps(self.tools_schema, indent=2)
         
         prompt = f"""You are a Satellite Imagery Analysis Agent.
         
-        You have access to the following TOOLS to answer user questions:
+        You have access to a set of TOOLS.
+        state: The system maintains an internal memory of detected objects. 
+        
+        TOOLS:
         {tools_json}
 
         INSTRUCTIONS:
-        1. Analyze the user query.
-        2. Check the METADATA to extract relevant IDs and numerical values (coordinates, areas, etc.).
-        3. Decide if you need to use a tool.
-        4. If you need a tool, output a JSON object with the keys "tool" and "arguments".
-        Example: {{ "tool": "calculator_tool", "arguments": {{ "expression": "10 + 20" }} }}
-        5. If no tool is needed, answer directly.
-        """
+        1. Always detect objects first if the question implies specific items (cars, buildings).
+        2. Once detected, refer to objects by their implied properties (rank, size) using 'get_object_info'.
+        3. Do NOT try to estimate coordinates or areas yourself. Use the tools.
+        4. If you need a tool, output a JSON object with "tool" and "arguments".
         
+        Example Flow:
+        User: "How big is the second largest building?"
+        Step 1: {{ "tool": "detect_objects", "arguments": {{ "target_class": "building" }} }}
+        Obs: Success. Detected 15 buildings.
+        Step 2: {{ "tool": "get_object_info", "arguments": {{ "attribute": "area", "rank_index": -2 }} }}
+        """
         return prompt
 
     def run(self, image: Image.Image, user_query: str, gsd: float = 1.0, metadata: Dict = {}, max_steps: int = 5):
-        """
-        Executes the agent loop with Multi-Step capability (ReAct Loop).
-        """
         self.image = image
         self.current_gsd = gsd
+        self._reset_state() # Clear previous query state
+        
         system_prompt_text = self._format_system_prompt()
         
-        # 1. Initialize History
         messages = [
-            {
-                "role": "system",
-                "content": [{"type": "text", "text": system_prompt_text}]
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": image},
-                    {"type": "text", "text": user_query}
-                ]
-            }
+            {"role": "system", "content": [{"type": "text", "text": system_prompt_text}]},
+            {"role": "user", "content": [{"type": "image", "image": image}, {"type": "text", "text": user_query}]}
         ]
 
         logger.info(f"--- Starting Agent Loop (Max Steps: {max_steps}) ---")
 
         for step in range(max_steps):
-            # 2. Prepare Inputs (History -> Tensors)
             text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
             image_inputs, video_inputs = process_vision_info(messages)
             
@@ -187,9 +224,7 @@ class SatelliteVQAAgent:
                 return_tensors="pt"
             ).to(self.model.device)
 
-            # 3. Generate Model Output
-            # print(f"Step {step + 1}: Generating thought...")
-            generated_ids = self.model.generate(**inputs, max_new_tokens=1024)
+            generated_ids = self.model.generate(**inputs, max_new_tokens=512)
             
             generated_ids_trimmed = [
                 out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
@@ -200,57 +235,37 @@ class SatelliteVQAAgent:
 
             logger.info(f"\n[Step {step+1} Model Output]: {output_text}")
 
-            # 4. Check for Tool Call
             tool_result = self._parse_and_execute_tool(output_text)
             
             if tool_result:
+                messages.append({"role": "assistant", "content": [{"type": "text", "text": output_text}]})
                 
-                # A. Append the model's thought/call as 'assistant'
-                messages.append({
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": output_text}]
-                })
-                
-                # B. Append the tool execution result as 'user' (Observation)
+                # Format observation
                 observation_text = f"Observation from tool '{tool_result['tool']}': {tool_result['result']}"
-                messages.append({
-                    "role": "user",
-                    "content": [{"type": "text", "text": observation_text}]
-                })
+                messages.append({"role": "user", "content": [{"type": "text", "text": observation_text}]})
                 
                 logger.info(f"[System]: {observation_text}")
-                # Loop continues to next iteration (Step 2, 3...)
-                
             else:
-                # No tool call found -> This is the Final Answer
-                logger.info("\n[Final Answer Reached]")
                 return {
                     "final_answer": output_text,
                     "steps_taken": step + 1
                 }
 
         return {"error": "Max steps reached without final answer."}
+        
 
     def _parse_and_execute_tool(self, text: str):
-        """
-        Parses JSON tool calls from text and executes the corresponding Python function.
-        """
         try:
-            # Look for JSON block
             json_match = re.search(r"\{.*\}", text, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group(0))
-                
                 tool_name = data.get("tool")
                 arguments = data.get("arguments")
                 
                 if tool_name in self.tool_map:
                     func = self.tool_map[tool_name]
-                    # Unpack arguments into function
                     result = func(**arguments)
                     return {"tool": tool_name, "result": result}
-                else:
-                    return None
         except Exception as e:
             logger.info(f"Failed to parse or execute tool: {e}")
             return None
@@ -278,6 +293,7 @@ if __name__ == "__main__":
     print("Agent setup complete")
 
 '''
+
 
 
 
