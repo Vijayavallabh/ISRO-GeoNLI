@@ -190,7 +190,7 @@ class VQATask:
             sys_prompt = (
                 "You are a remote sensing assistant. "
                 "The user asks a numeric question, to be answered only with a numeric value. "
-                "Estimate or count the required value based on the visual image, and all the context from the question. "
+                "Estimate or count the required value based on the visual image, and all the relevant context from the question. "
                 "Provide the number clearly."
             )
         elif q_type == "binary":
