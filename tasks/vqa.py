@@ -33,15 +33,15 @@ Route to SAM3 when the question requires:
 6. **Ratio/Proportion Comparisons**: "ratio of", "more X than Y"
 7. **Spatial Relationships Requiring Segmentation**: "adjacent to", "overlap", "precise arrangement"
 8. **Size/Dimension Analysis**: "size of", "how wide"
+9. **Object Existence/Presence**: "Is a X present?", "Are there any X?"
 
 ## When to Route to VLM
 Route to VLM when the question can be answered through visual understanding alone:
-1. **Object Existence/Presence**: "Is a X present?", "Are there any X?"
-2. **Visual Attributes**: "color", "texture", "appearance"
-3. **Object Recognition/Classification**: "What type of...", "Is this urban/rural?"
-4. **Scene Understanding**: "weather", "time of day", "context"
-5. **Qualitative Descriptions**: "Describe the landscape"
-6. **Approximate Comparisons**: "more trees than buildings" (visual estimate)
+1. **Visual Attributes**: "color", "texture", "appearance"
+2. **Object Recognition/Classification**: "What type of...", "Is this urban/rural?"
+3. **Scene Understanding**: "weather", "time of day", "context"
+4. **Qualitative Descriptions**: "Describe the landscape"
+5. **Approximate Comparisons**: "more trees than buildings" (visual estimate)
 
 ## Output Format
 Respond with ONLY a single word:
@@ -189,15 +189,15 @@ class VQATask:
         if q_type == "numeric":
             sys_prompt = (
                 "You are a remote sensing assistant. "
-                "The user asks a numeric question. "
-                "Count or estimate the quantity based on the visual image. "
+                "The user asks a numeric question, to be answered only with a numeric value. "
+                "Estimate or count the required value based on the visual image, and all the context from the question. "
                 "Provide the number clearly."
             )
         elif q_type == "binary":
             sys_prompt = (
                 "You are a remote sensing assistant. "
                 "The user asks a binary (Yes/No) question. "
-                "Analyze the image and answer with ONLY 'Yes' or 'No'."
+                "Analyze the image and the question context, and answer with ONLY 'Yes' or 'No'."
             )
         else: # semantic
             sys_prompt = (
