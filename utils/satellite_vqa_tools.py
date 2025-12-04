@@ -220,6 +220,11 @@ def calculator_tool(expression: str) -> Union[float, str]:
     except Exception as e:
         return f"Error: {e}"
 
+def get_available_attributes() -> List[str]:
+    """Returns list of all queryable attributes."""
+    return list(ATTRIBUTE_MAP.keys())
+
+
 
 
 
