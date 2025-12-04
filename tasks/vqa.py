@@ -77,7 +77,6 @@ class VQATask:
         Args:
             image: PIL Image
             query: The user's question
-            detections: List of grounding detections
             gsd: Ground Sample Distance
             question_type: 'numeric', 'binary', or 'semantic'
         """
