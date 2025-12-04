@@ -50,6 +50,56 @@ def select_object_by_rank(objects_list: List[Dict], sort_key: str, rank_index: i
     except IndexError:
         return None, f"Rank {rank_index} is out of bounds. Only found {len(sorted_objs)} objects."
 
+def filter_objects_by_region(objects_list: List[Dict], region: str, image_size: Tuple[int, int]):
+    """
+    Filters objects based on their centroid location within the image.
+    Regions: top, bottom, left, right, top-left, top-right, bottom-left, bottom-right, center.
+    """
+    img_w, img_h = image_size
+    filtered_objects = []
+    
+    for obj in objects_list:
+        # Calculate centroid from coordinates [x1, y1, x2, y2...]
+        coords = obj.get('coordinates', [])
+        if not coords:
+            continue
+        cx = sum(coords[0::2]) / (len(coords) // 2)
+        cy = sum(coords[1::2]) / (len(coords) // 2)
+        
+        match = False
+        region = region.lower().replace("-", " ").strip()
+        
+        # Definitions
+        is_top = cy < img_h / 2
+        is_bottom = cy >= img_h / 2
+        is_left = cx < img_w / 2
+        is_right = cx >= img_w / 2
+        
+        if region == "top":
+            match = is_top
+        elif region == "bottom":
+            match = is_bottom
+        elif region == "left":
+            match = is_left
+        elif region == "right":
+            match = is_right
+        elif "top" in region and "left" in region:
+            match = is_top and is_left
+        elif "top" in region and "right" in region:
+            match = is_top and is_right
+        elif "bottom" in region and "left" in region:
+            match = is_bottom and is_left
+        elif "bottom" in region and "right" in region:
+            match = is_bottom and is_right
+        elif region == "center":
+            # Central 50% of the image
+            match = (img_w * 0.25 < cx < img_w * 0.75) and (img_h * 0.25 < cy < img_h * 0.75)
+            
+        if match:
+            filtered_objects.append(obj)
+            
+    return filtered_objects
+
 def calculate_distance_by_indices(objects_list: List[Dict], idx1: int, idx2: int):
     """
     Calculates distance between two objects using their list indices.
@@ -83,4 +133,5 @@ def calculator_tool(expression: str) -> Union[float, str]:
         return float(result)
     except Exception as e:
         return f"Error computing expression: {e}"
+
 
