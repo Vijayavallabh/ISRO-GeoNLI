@@ -14,7 +14,7 @@ class SAM3Interface:
         self.device = device
         self.geo_calc = GeoCalculator(spatial_resolution_m=spatial_resolution_m)
 
-    def segment_image(self, image: Image.Image, target_class):
+    def segment_image(self, image: Image.Image, target_class, gsd = None):
         try:
             inputs = self.processor(
                 images=image,
@@ -45,7 +45,7 @@ class SAM3Interface:
                 mask_np = mask.cpu().numpy()
                 mask_bool = (mask_np > 0.5).astype(bool)
                 
-                geo_data = self.geo_calc.extract_metadata_from_mask(mask_bool)
+                geo_data = self.geo_calc.extract_metadata_from_mask(mask_bool, gsd=gsd)
                 
                 if geo_data is not None:
                     sam_metadata.append({
