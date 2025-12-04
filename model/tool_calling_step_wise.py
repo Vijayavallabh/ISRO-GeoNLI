@@ -118,13 +118,14 @@ class SatelliteVQAAgent:
 
     def _distance_tool_wrapper(self, group_a, group_b):
         """Wrapper to convert pixel distance to meters."""
-        results = distance_tool(group_a, group_b)
+        pixel_results = distance_tool(group_a, group_b)
     
-        for item in results:
-            if "distance" in item:
-                item["distance"] = round(item["distance"] * self.current_gsd, 2)
-                item["unit"] = "meters"
-        return results
+        for item in pixel_results:
+            pixel_dist = item["distance"]
+            item["distance"] = round(pixel_dist * self.current_gsd, 2)
+            item["unit"] = "meters"
+            
+        return pixel_results
 
     def _format_system_prompt(self):
         """
@@ -277,5 +278,6 @@ if __name__ == "__main__":
     print("Agent setup complete")
 
 '''
+
 
 
