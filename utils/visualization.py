@@ -52,7 +52,7 @@ def annotate_image_with_boxes(image, obbs):
 
         # --- Draw ID label
         text = str(idx)
-        bbox = draw.textbbox((cx, cy), text, font=font)
+        bbox = draw.textbbox((cx, cy), text, font=font, anchor="mm")
         draw.rectangle(
             (bbox[0]-2, bbox[1]-2, bbox[2]+2, bbox[3]+2),
             fill="white",
