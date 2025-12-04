@@ -1,47 +1,64 @@
-# training code on VRS Bench-like image annotation pairs 
-# inspiration for prompt from the Geo Chat code 
-# all tasks trained together 
 import os
 import json
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import (
-    Qwen2VLForConditionalGeneration,
+    Qwen2_5_VLForConditionalGeneration, 
     AutoProcessor,
+    AutoModelForVision2Seq,
     BitsAndBytesConfig,
     TrainingArguments,
     Trainer
 )
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from PIL import Image
-from typing import Dict, List
+from typing import Dict, List, Any
 import random
 
-class VRSBenchDataset(Dataset):
-    """Dataset class for VRS Bench annotations."""
-    
-    def __init__(self, image_dir: str, annotation_dir: str, processor, max_samples=None): #OK
-        self.image_dir = image_dir
-        self.annotation_dir = annotation_dir
+# --- CHANGED: Updated Dataset Class to handle multiple sources ---
+class VRSDataset(Dataset):    
+    def __init__(self, dataset_configs: List[Dict[str, str]], processor, max_samples=None): 
+        """
+        Args:
+            dataset_configs: List of dicts, e.g., 
+                             [{"image_dir": "path/A", "annotation_dir": "path/B"}, ...]
+            processor: AutoProcessor instance
+            max_samples: Optional limit for debugging
+        """
         self.processor = processor
-        
-        # Load all annotation files
         self.annotations = []
-        for ann_file in os.listdir(annotation_dir):
-            if ann_file.endswith('.json'):
-                with open(os.path.join(annotation_dir, ann_file), 'r') as f:
-                    ann = json.load(f)
-                    self.annotations.append(ann)
+        
+        for config in dataset_configs:
+            img_dir = config["image_dir"]
+            ann_dir = config["annotation_dir"]
+            
+            print(f"Loading annotations from: {ann_dir}")
+            
+            current_source_anns = []
+            if os.path.exists(ann_dir):
+                for ann_file in os.listdir(ann_dir):
+                    if ann_file.endswith('.json'):
+                        with open(os.path.join(ann_dir, ann_file), 'r') as f:
+                            ann = json.load(f)
+                            # IMPORTANT: Store the specific image root for this file
+                            # so we know where to look for the image later
+                            ann['_root_image_dir'] = img_dir 
+                            current_source_anns.append(ann)
+            else:
+                print(f"Warning: Directory {ann_dir} not found.")
+
+            print(f" -> Found {len(current_source_anns)} samples in {ann_dir}")
+            self.annotations.extend(current_source_anns)
         
         if max_samples:
             self.annotations = self.annotations[:max_samples]
-        
-        print(f"Loaded {len(self.annotations)} samples")
+            
+        print(f"Total Combined Samples: {len(self.annotations)}")
     
     def __len__(self):
         return len(self.annotations)
     
-    def create_training_samples(self, annotation: Dict) -> List[Dict]: #OK
+    def create_training_samples(self, annotation: Dict) -> List[Dict]:
         """Create multiple training samples from one annotation."""
         samples = []
         
@@ -50,60 +67,52 @@ class VRSBenchDataset(Dataset):
             "prompt": "Describe this image in detail.",
             "response": annotation["caption"]
         })
-        ''' ignore obj referring for now 
-        # 2. Object referring tasks
-        for obj in annotation["objects"]:
-            samples.append({
-                "prompt": f"Describe the {obj['obj_cls']} in this image.",
-                "response": obj["referring_sentence"]
-            })
-        '''
+        
         # 3. QA pairs
-        for qa in annotation["qa_pairs"]:
-            samples.append({
-                "prompt": qa["question"],
-                "response": qa["answer"]
-            })
+        if "qa_pairs" in annotation:
+            for qa in annotation["qa_pairs"]:
+                samples.append({
+                    "prompt": qa["question"],
+                    "response": qa["answer"]
+                })
         
         return samples
     
     def __getitem__(self, idx):
         annotation = self.annotations[idx]
         
-        # Load image
-        image_path = os.path.join(self.image_dir, annotation["image"])
-        image = Image.open(image_path).convert("RGB")
+        # --- CHANGED: Load image using the specific root dir for this annotation ---
+        image_path = os.path.join(annotation["_root_image_dir"], annotation["image"])
         
+        try:
+            image = Image.open(image_path).convert("RGB")
+        except FileNotFoundError:
+            # Fallback or error handling if path is wrong
+            print(f"Error: Image not found at {image_path}")
+            # Create a black image to prevent crash, or raise error depending on preference
+            image = Image.new('RGB', (224, 224), color='black')
+
         # Get all training samples
         training_samples = self.create_training_samples(annotation)
         
-        #  CONSTRUCT MULTI-TURN CONVERSATION
         conversation = []
         
         for i, sample in enumerate(training_samples):
-            # User Turn
             user_content = []
-            
-            # The image is only passed in the very first turn of the conversation
             if i == 0:
                 user_content.append({"type": "image"})
-            
             user_content.append({"type": "text", "text": sample["prompt"]})
             
             conversation.append({
                 "role": "user",
                 "content": user_content
             })
-            
-            # Assistant Turn
             conversation.append({
                 "role": "assistant",
-                "content": [
-                    {"type": "text", "text": sample["response"]}
-                ]
+                "content": [{"type": "text", "text": sample["response"]}]
             })
         
-        # Process inputs (Apply template + Tokenize)
+        # Process inputs
         text = self.processor.apply_chat_template(
             conversation, 
             tokenize=False, 
@@ -117,37 +126,24 @@ class VRSBenchDataset(Dataset):
             return_tensors="pt"
         )
         
-        # 2. UPDATED MULTI-TURN MASKING LOGIC
+        # Masking logic
         input_ids = inputs["input_ids"][0]
         labels = input_ids.clone()
-        
-        # Mask everything by default (set to -100)
         labels[:] = -100
         
         assistant_token_id = self.processor.tokenizer.encode("assistant", add_special_tokens=False)[0]
-        
         eos_token_id = self.processor.tokenizer.eos_token_id
         
-        # Iterate through input_ids to find all turns
         i = 0
         while i < len(input_ids):
-            # Find start of assistant response
             if input_ids[i] == assistant_token_id:
-                # Move forward to skip the "assistant" header itself (usually followed by newline)
-                # Adjust offset (+2 or +1) depending on specific template spacing
                 start_response = i + 2 
-                
-                # Find the end of this response (the next EOS token)
                 end_response = len(input_ids)
                 for j in range(start_response, len(input_ids)):
                     if input_ids[j] == eos_token_id:
-                        end_response = j + 1 # Include the EOS token in training (optional but recommended)
+                        end_response = j + 1
                         break
-                
-                # Unmask the response (copy original input_ids to labels)
                 labels[start_response:end_response] = input_ids[start_response:end_response]
-                
-                # Move i to the end of this turn
                 i = end_response
             else:
                 i += 1
@@ -159,28 +155,21 @@ class VRSBenchDataset(Dataset):
             "image_grid_thw": inputs["image_grid_thw"].squeeze(0),
             "labels": labels
         }
-    
 
 def collate_fn(batch):
-    """Custom collate function to handle variable-length sequences and vision inputs."""
-    # Extract components
+    # (Same as your original code)
     input_ids = [item["input_ids"] for item in batch]
     attention_mask = [item["attention_mask"] for item in batch]
     labels = [item["labels"] for item in batch]
-    
-    # For vision inputs, we need to handle them carefully
-    # pixel_values can have different shapes due to different image sizes
     pixel_values_list = [item["pixel_values"] for item in batch]
     image_grid_thw_list = [item["image_grid_thw"] for item in batch]
     
-    # Pad text sequences
     max_len = max(len(ids) for ids in input_ids)
     
     padded_input_ids = []
     padded_attention_mask = []
     padded_labels = []
-    
-    pad_token_id = 0  # Qwen2-VL uses 0 for padding
+    pad_token_id = 0 
     
     for ids, mask, lab in zip(input_ids, attention_mask, labels):
         padding_length = max_len - len(ids)
@@ -188,26 +177,18 @@ def collate_fn(batch):
         padded_attention_mask.append(torch.cat([mask, torch.zeros(padding_length, dtype=mask.dtype)]))
         padded_labels.append(torch.cat([lab, torch.full((padding_length,), -100, dtype=lab.dtype)]))
     
-    # Stack text tensors
     batch_dict = {
         "input_ids": torch.stack(padded_input_ids),
         "attention_mask": torch.stack(padded_attention_mask),
         "labels": torch.stack(padded_labels)
     }
     
-    # Handle vision inputs - concatenate along batch dimension
     if len(pixel_values_list) > 0:
-        # pixel_values shape: [num_patches, channels, height, width]
-        # We need to concatenate all images' patches
         all_pixel_values = []
         all_image_grid_thw = []
-        
         for pv, thw in zip(pixel_values_list, image_grid_thw_list):
-            # Ensure tensors have correct dimensions
-            if pv.dim() == 3:  # Missing batch dimension
-                pv = pv.unsqueeze(0)
-            if thw.dim() == 1:  # Missing batch dimension
-                thw = thw.unsqueeze(0)
+            if pv.dim() == 3: pv = pv.unsqueeze(0)
+            if thw.dim() == 1: thw = thw.unsqueeze(0)
             all_pixel_values.append(pv)
             all_image_grid_thw.append(thw)
         
@@ -218,13 +199,17 @@ def collate_fn(batch):
 
 def main():
     # Configuration
-    MODEL_NAME = "Qwen/Qwen2-VL-7B-Instruct"  # Using 7B as 8B might be a typo
-    IMAGE_DIR = "VRS_image_val"  # Update this
-    ANNOTATION_DIR = "VRS_annotations_val"  # Update this
-    OUTPUT_DIR = "./qwen2vl_lora_finetuned"
+    MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct"
+    OUTPUT_DIR = "outputs/qwen2_5_8"
     
-    # 4-bit quantization config
-    # to test with higher quantisation
+    # --- CHANGED: Define multiple dataset configurations here ---
+    DATASET_CONFIGS = [
+        {
+            "image_dir": "VRS/train", 
+            "annotation_dir": "VRS_annotations/train"
+        }
+    ]
+
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
@@ -235,19 +220,16 @@ def main():
     local_rank = int(os.environ.get("LOCAL_RANK", -1))
     device_map = {"": local_rank} if local_rank != -1 else "auto"
 
-    print(f"Loading model on device_map: {device_map}...")
+    print(f"Loading model... on {local_rank}")
 
-
-    # Load model with quantization
-    print("Loading model...")
-    model = Qwen2VLForConditionalGeneration.from_pretrained(
+    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         MODEL_NAME,
         quantization_config=bnb_config,
         device_map=device_map,
         torch_dtype=torch.bfloat16,
         attn_implementation="flash_attention_2",  # Use flash attention if available
     )
-    
+
     # Load processor
     processor = AutoProcessor.from_pretrained(
         MODEL_NAME,
@@ -255,65 +237,54 @@ def main():
         max_pixels=1280*28*28,
         padding_side="right"
     )
-    
+
     # Prepare model for k-bit training
     model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+
+
+
+    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
     
-    # Find all attention layer names in the language model
-    # Qwen2-VL structure: model.layers.{i}.self_attn.{q,k,v,o}_proj
     target_modules = []
     for name, module in model.named_modules():
         if "model.layers" in name and "self_attn" in name and any(x in name for x in ["q_proj", "v_proj"]):
-            # Extract just the relative module name
-            if "visual" not in name:  # Exclude vision encoder
+            if "visual" not in name:
                 module_name = name.split(".")[-1]
                 if module_name not in target_modules:
                     target_modules.append(module_name)
     
-    print(f"Target modules for LoRA: {target_modules}")
-    
-    # LoRA configuration - targeting only language model attention layers
     lora_config = LoraConfig(
-        r=16,  # Rank
-        lora_alpha=32,  # Scaling factor
-        target_modules=target_modules, 
-        lora_dropout=0,
-        bias="none",
-        task_type="CAUSAL_LM",
-        modules_to_save=None,
+        r=16, lora_alpha=32, target_modules=target_modules, 
+        lora_dropout=0, bias="none", task_type="CAUSAL_LM"
     )
-    
-    # Apply LoRA
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
     
-    # Create datasets
+    # --- CHANGED: Pass the config list to the dataset ---
     print("Loading datasets...")
-    train_dataset = VRSBenchDataset(IMAGE_DIR, ANNOTATION_DIR, processor)
+    train_dataset = VRSDataset(DATASET_CONFIGS, processor)
     
-    # Training arguments
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
         num_train_epochs=3,
-        per_device_train_batch_size=16, 
-        gradient_accumulation_steps=1, 
+        per_device_train_batch_size=32, 
+        gradient_accumulation_steps=2, 
         learning_rate=2e-4,
         warmup_steps=100,
-        logging_steps=10,
+        logging_steps=50,
         save_steps=500,
         save_total_limit=1,
         fp16=False,
         bf16=True,
         optim="paged_adamw_8bit",
         remove_unused_columns=False,
-        dataloader_pin_memory=False,
         gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},
-        report_to="tensorboard",
+        report_to="wandb",
+        run_name="vrs_covt_ft",
         ddp_find_unused_parameters=False,
+        overwrite_output_dir=True
     )
     
-    # Initialize trainer
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -321,16 +292,11 @@ def main():
         data_collator=collate_fn,
     )
     
-    # Train
     print("Starting training...")
     trainer.train()
     
-    # Save final model
-    print("Saving model...")
     model.save_pretrained(OUTPUT_DIR)
     processor.save_pretrained(OUTPUT_DIR)
-    
-    print(f"Training complete! Model saved to {OUTPUT_DIR}")
 
 if __name__ == "__main__":
     main()
