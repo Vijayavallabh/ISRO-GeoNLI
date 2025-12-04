@@ -9,7 +9,7 @@ from io import BytesIO
 from PIL import Image
 from fastapi import HTTPException
 import requests
-
+import re
 from rs_pipeline import RSPipeline
 
 
@@ -229,15 +229,16 @@ def image_to_base64(image: Image.Image) -> str:
 def format_grounding_response(detections):
     """
     Convert pipeline detections to API response format.
+    Expects canonical obbox = 8-point polygon.
     """
     response = []
 
     for det in detections or []:
-        obb = det.get("obb")
-        if obb and len(obb) == 8:
+        obbox = det.get("obbox")
+        if isinstance(obbox, (list, tuple)) and len(obbox) == 8:
             response.append({
-                "object-id": str(det.get("id", "")),
-                "obbox": [float(v) for v in obb],  # 8 corner coords
+                "object-id": str(det.get("id", det.get("object-id", ""))),
+                "obbox": [float(v) for v in obbox],
             })
 
     return response

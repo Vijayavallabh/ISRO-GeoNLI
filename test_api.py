@@ -7,7 +7,7 @@ import base64
 import json
 from pathlib import Path
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "https://a2f7b83599770.notebooks.jarvislabs.net/proxy/8080/"
 
 PAYLOAD = {
             "input_image": {
@@ -60,24 +60,40 @@ def test_structured_endpoint():
 
 
 def test_simple_query_endpoint():
-    """Test the /query endpoint with simple text query."""
     print("\n" + "="*60)
     print("Testing /query endpoint (Simple Query with Auto-Classification)")
     print("="*60)
-    
-    # You'll need to replace this with an actual image path
-    # image_b64 = encode_image("path/to/your/image.jpg")
-    
+
     payload = {
         "query": "locate the sun here",
         "image_path": "/home/ISRO-GeoNLI/sample_image.png",
-        # "image_url": "https://example.com/image.jpg",  # OR use image_base64
-        # "image_base64": f"data:image/png;base64,{image_b64}"
     }
-    
+
     response = requests.post(f"{BASE_URL}/query", json=payload)
     print(f"Status: {response.status_code}")
-    print(json.dumps(response.json(), indent=2))
+
+    data = response.json()
+
+    # ---- Extract ONLY the answer ----
+    results = data.get("results", {})
+
+    answer = None
+
+    if "attributes" in results:
+        # Numeric / semantic / binary
+        for _, v in results["attributes"].items():
+            answer = v.get("response")
+            break
+
+    elif "caption" in results:
+        answer = results["caption"].get("response")
+
+    elif "grounding" in results:
+        answer = results["grounding"].get("detections")
+
+    print("\n✅ Extracted Answer:")
+    print(answer)
+
 
 
 def test_legacy_caption_endpoint():
