@@ -20,13 +20,16 @@ from rs_pipeline import RSPipeline
 _pipeline: Optional[RSPipeline] = None
 
 
-def get_pipeline(vlm_model_id: str = "Qwen/Qwen3-VL-8B-Instruct") -> RSPipeline:
+def get_pipeline(vlm_model_id: str = "Dinosaur2314/qwen_finetune11") -> RSPipeline:
     """Return a singleton RSPipeline instance (lazy-initialized)."""
     global _pipeline
     if _pipeline is None:
         try:
             _pipeline = RSPipeline(vlm_model_id=vlm_model_id)
         except Exception as e:
+            import traceback
+            print("PIPELINE INITIALIZATION FAILED")
+            traceback.print_exc()   # prints FULL stack trace
             raise RuntimeError(f"Failed to initialize pipeline: {e}")
     return _pipeline
 

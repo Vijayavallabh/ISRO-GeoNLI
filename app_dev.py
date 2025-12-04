@@ -118,7 +118,7 @@ async def process_structured(request: StructuredRequest, include_annotations: bo
     Process structured request matching query.json schema.
     Executes each query type individually through the pipeline.
     """
-    pipeline = get_pipeline()
+    pipeline = pipeline = get_pipeline(vlm_model_id="Dinosaur2314/qwen_finetune11")
 
     # Load image
     image = get_image_from_input(request.input_image)
@@ -353,7 +353,7 @@ async def grounding_endpoint(payload: dict):
     image = decode_image_from_base64(b64)
 
     try:
-        pipeline = get_pipeline()
+        pipeline = get_pipeline(vlm_model_id="Dinosaur2314/qwen_finetune11")
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -382,7 +382,7 @@ async def vqa_endpoint(payload: dict):
     image = decode_image_from_base64(b64)
 
     try:
-        pipeline = get_pipeline()
+        pipeline = get_pipeline(vlm_model_id="Dinosaur2314/qwen_finetune11")
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
