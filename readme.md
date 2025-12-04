@@ -5,7 +5,7 @@ A production-ready pipeline for remote sensing image analysis using Vision Langu
 - **Object Grounding**: Detect and localize objects with oriented bounding boxes
 - **Visual Question Answering**: Answer numeric, binary, and semantic questions
 
-**Model**: Fine-tuned Qwen3-VL-8B (`Dinosaur2314/qwen_finetune11`)
+**Model**: Fine-tuned Qwen3-VL-8B (Weights are provided in the zip file)
 
 ## Repository Structure
 
@@ -42,14 +42,13 @@ ISRO-GeoNLI/
 
 ### Prerequisites
 - Python 3.10+
-- CUDA-capable GPU (16GB+ VRAM recommended)
+- CUDA-capable GPU (36GB+ VRAM recommended)
 - HuggingFace account with model access
 
 ### Installation
 
 ```bash
 # Clone repository
-git clone https://github.com/Vijayavallabh/ISRO-GeoNLI.git
 cd ISRO-GeoNLI
 
 # Create environment
@@ -194,96 +193,6 @@ Binary/Semantic      Numeric
     Output: Answer String
 ```
 
-## Python API Usage
-
-```python
-from PIL import Image
-from rs_pipeline import RSPipeline
-
-# Initialize
-pipeline = RSPipeline(
-    vlm_model_id="Dinosaur2314/qwen_finetune11",
-    sam_model_id="facebook/sam3"
-)
-
-image = Image.open("satellite.jpg")
-gsd = 1.57  # Ground Sample Distance (meters/pixel)
-
-# Captioning
-caption = pipeline.generate_caption(image, "Describe this aerial image.")
-
-# Grounding
-detections = pipeline.ground_objects(image, "Locate all airports", score_threshold=0.4)
-
-# VQA
-answer = pipeline.answer_question(
-    image, 
-    "How many aircraft are visible?",
-    question_type="numeric",
-    gsd=gsd
-)
-```
-
-## Configuration
-
-### Model Selection
-```python
-# Fine-tuned model (default)
-pipeline = RSPipeline(vlm_model_id="Dinosaur2314/qwen_finetune11")
-
-# Base model
-pipeline = RSPipeline(vlm_model_id="Qwen/Qwen3-VL-8B")
-```
-
-### Parameters
-- **score_threshold**: Confidence threshold for grounding (default: 0.4)
-- **gsd**: Ground Sample Distance in meters/pixel (required for area calculations)
-- **question_type**: "binary", "numeric", or "semantic" for VQA
-
-## Troubleshooting
-
-### CUDA Out of Memory
-```bash
-# Monitor GPU memory
-nvidia-smi -l 1
-
-# Clear cache
-python -c "import torch; torch.cuda.empty_cache()"
-
-# Use CPU fallback (slower)
-pipeline = RSPipeline(device="cpu")
-```
-
-### Model Access Denied
-```bash
-# Login to HuggingFace
-huggingface-cli login
-
-# Request access to gated models
-# Visit https://huggingface.co/facebook/sam3
-```
-
-### Port Already in Use
-```bash
-# Windows
-netstat -ano | findstr :8080
-taskkill /PID <PID> /F
-
-# Linux/Mac
-lsof -i :8080
-kill -9 <PID>
-```
-
-### Slow Inference
-- Use `app_prod.py` (preloads models) instead of `app_dev.py`
-- Reduce image resolution before processing
-- Increase `score_threshold` for faster grounding
-
-### No Grounding Detections
-- Lower `score_threshold` (default: 0.4 → try 0.2)
-- Verify query phrasing: "Locate all X" instead of "Show me X"
-- Ensure image quality (RGB mode, size > 512x512)
-
 ## License
 
 - Pipeline Code: MIT License
@@ -306,8 +215,4 @@ kill -9 <PID>
 }
 ```
 
-## Contact
-
-- Repository: [github.com/Vijayavallabh/ISRO-GeoNLI](https://github.com/Vijayavallabh/ISRO-GeoNLI)
-- Issues: [GitHub Issues](https://github.com/Vijayavallabh/ISRO-GeoNLI/issues)
 

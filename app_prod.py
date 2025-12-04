@@ -172,11 +172,12 @@ async def process_structured(request: StructuredRequest, include_annotations: bo
     # Attribute Queries
     if request.queries.attribute_query:
         attr_results = {}
+        gsd = request.queries.attribute_query.spatial_resolution_m or 1.0
 
         if request.queries.attribute_query.binary:
             instruction = request.queries.attribute_query.binary["instruction"]
             raw_answer = pipeline.answer_question(
-                image, instruction, question_type="binary"
+                image, instruction, question_type="binary", gsd=gsd
             )
             answer = normalize_vqa_answer(raw_answer, "binary")
 
@@ -188,7 +189,7 @@ async def process_structured(request: StructuredRequest, include_annotations: bo
         if request.queries.attribute_query.numeric:
             instruction = request.queries.attribute_query.numeric["instruction"]
             raw_answer = pipeline.answer_question(
-                image, instruction, question_type="numeric"
+                image, instruction, question_type="numeric", gsd=gsd
             )
             answer = normalize_vqa_answer(raw_answer, "numeric")
 
@@ -200,7 +201,7 @@ async def process_structured(request: StructuredRequest, include_annotations: bo
         if request.queries.attribute_query.semantic:
             instruction = request.queries.attribute_query.semantic["instruction"]
             answer = pipeline.answer_question(
-                image, instruction, question_type="semantic"
+                image, instruction, question_type="semantic", gsd=gsd
             )
 
             attr_results["semantic"] = {
@@ -236,11 +237,13 @@ async def process_simple_query(request: SimpleRequest):
     
     # Classify the query with the actual image for better context
     classified_queries = classify_query(request.query, image=image)
+
+    gsd = request.spatial_resolution_m if request.spatial_resolution_m is not None else 1.0
     
     queries = Queries(
         caption_query=CaptionQuery(**classified_queries["caption_query"]) if classified_queries["caption_query"] else None,
-        grounding_query=GroundingQuery(**classified_queries["grounding_query"]) if classified_queries["grounding_query"] else None,
-        attribute_query=AttributeQuery(**classified_queries["attribute_query"]) if classified_queries["attribute_query"] else None
+        grounding_query=GroundingQuery(**classified_queries["grounding_query"] ) if classified_queries["grounding_query"] else None,
+        attribute_query=AttributeQuery(**classified_queries["attribute_query"], spatial_resolution_m=gsd) if classified_queries["attribute_query"] else None
     )
     
     structured = StructuredRequest(input_image=input_image, queries=queries)
