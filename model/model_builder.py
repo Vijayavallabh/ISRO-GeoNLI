@@ -76,7 +76,7 @@ def build_vlm_model(
     try:
         model = PeftModel.from_pretrained(
             model, 
-            model_id, 
+            model_id, ## Change to local path having weights
             token=hf_token
         )
     except Exception as e:
