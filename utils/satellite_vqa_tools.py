@@ -35,12 +35,15 @@ def distance_tool(group_a: List[Tuple[str, float, float, float, float]],
     results = []
 
     for item_a in group_a:
-        id_a, cx_a, cy_a = item_a
+        id_a, x1_a, x2_a, y1_a, y2_a = item_a
+        cx_a = (x1_a + x2_a) / 2
+        cy_a = (y1_a + y2_a) / 2
         
         for item_b in group_b:
-            id_b, cx_b, cy_b = item_b
+            id_b, x1_b, x2_b, y1_b, y2_b = item_b
+            cx_b = (x1_b + x2_b) / 2
+            cy_b = (y1_b + y2_b) / 2
             
-            # If comparing a list to itself, skip comparing an object to itself
             if id_a == id_b:
                 continue
 
@@ -53,7 +56,6 @@ def distance_tool(group_a: List[Tuple[str, float, float, float, float]],
                 "distance": round(dist, 2)
             })
 
-    # Sort results by distance (closest first) for convenience
     return sorted(results, key=lambda x: x['distance'])
 
 def calculator_tool(expression: str) -> Union[float, str]:
@@ -94,4 +96,5 @@ def calculator_tool(expression: str) -> Union[float, str]:
         return float(result)
     except Exception as e:
         return f"Error computing expression: {e}"
+
 
