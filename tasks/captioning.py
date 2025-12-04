@@ -29,7 +29,7 @@ class CaptioningTask:
         SYSTEM_PROMPT_CAPTION = """
         You are a vision-language assistant specialized in factual image captioning.
         
-        Your task is to generate a clear, well-structured caption of approximately 50–150 words that describes all clearly visible content in the image. 
+        Your task is to generate a clear, well-structured caption of around 70 words that describes all clearly visible content in the image. 
         The caption should be concise, crisp, and focused, avoiding unnecessary or repetitive details while covering all important visual elements.
         
         ## Important Guidelines for Image Captioning:
@@ -43,6 +43,6 @@ class CaptioningTask:
         
         """
         
-        final_caption = self.vlm.query(image, instruction, SYSTEM_PROMPT_CAPTION, max_tokens=256)
+        final_caption = self.vlm.query(image, instruction, SYSTEM_PROMPT_CAPTION, max_tokens=512)
 
         return final_caption
