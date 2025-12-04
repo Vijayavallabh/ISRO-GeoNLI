@@ -5,8 +5,6 @@ A production-ready pipeline for remote sensing image analysis using Vision Langu
 - **Object Grounding**: Detect and localize objects with oriented bounding boxes
 - **Visual Question Answering**: Answer numeric, binary, and semantic questions
 
-**Model**: Fine-tuned Qwen3-VL-8B (Weights are provided in the zip file)
-
 ## Repository Structure
 
 ```
