@@ -53,6 +53,7 @@ class AttributeQuery(BaseModel):
     binary: Optional[Dict[str, str]] = None
     numeric: Optional[Dict[str, str]] = None
     semantic: Optional[Dict[str, str]] = None
+    spatial_resolution_m : Optional[float] = None
 
 
 class Queries(BaseModel):
@@ -81,3 +82,4 @@ class SimpleRequest(BaseModel):
     image_url: Optional[str] = None
     image_base64: Optional[str] = None
     image_path: Optional[str] = None  # Local file system path
+    spatial_resolution_m : Optional[float] = None
