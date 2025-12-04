@@ -54,27 +54,141 @@ def classify_query(query: str, image=None, vlm_interface=None) -> Dict[str, Any]
         vlm_interface = pipeline.vlm
     
     # Classification prompt
-    classification_prompt = f"""Classify the following query into ONE of these categories:
+    classification_prompt = f"""You are an expert linguistic classifier for a visual dataset. Your task is to classify text strings into: 'CAPTION', 'GROUNDING', 'VQA_BINARY', 'VQA_NUMERIC', or 'VQA_SEMANTIC'.
 
-1. CAPTION: Queries asking for general description, summary, or explanation of an image
-   Examples: "Describe this image", "What do you see?", "Generate a caption", "Explain what's in the image"
+CLASSIFICATION LOGIC:-
 
-2. GROUNDING: Queries asking to locate, find, or identify specific objects/regions in an image
-   Examples: "Find all buildings", "Locate vehicles", "Where are the trees?", "Identify water bodies"
+1.⁠ ⁠CAPTION (Broad Description)
+Assign this label ONLY if the text asks you to give a broad, holistic description of the image content.
+Key Indicators:
+    * Starts with "Describe the image", "Give a caption for the image", "Explain everything given in the image".
+    * Describes the scene generally rather than asserting a specific fact.
+Example: -
 
-3. VQA_BINARY: Yes/No questions about the image
-   Examples: "Is there water?", "Are there buildings?", "Does it have trees?", "Can you see vehicles?"
+### *Easy*
 
-4. VQA_NUMERIC: Questions asking for counts, quantities, or numeric measurements
-   Examples: "How many buildings?", "Count the vehicles", "What is the area?", "How many objects?"
+1. “Describe the image in two sentences.”
+2. “Give a detailed caption for this scene.”
+3. “Explain what is happening here.”
+4. “Provide a brief overview of the image content.”
 
-5. VQA_SEMANTIC: Questions about attributes, types, colors, or qualitative properties
-   Examples: "What color is the roof?", "What type of terrain?", "What kind of building?", "Which season?"
+### *Moderate*
+
+5. “Summarize the entire visual setting shown.”
+6. “Offer a high-level description of everything visible.”
+7. “Describe all key objects and how they relate spatially.”
+
+### *Hard / Ambiguous*
+
+8. “Paint a picture in words of the whole scene.”
+9. “Explain the visual story unfolding here.”
+10. “What can be inferred about the setting from the image as a whole?”
+
+
+2.⁠ ⁠GROUNDING (Referring Expression)
+Assign this label if the text is a distinct noun phrase acting as a pointer to a specific region, often lacking a main verb.
+Key Indicators:
+    * Fragments: "The red car on the left", "The bottom-most bridge".
+    * Purpose is to select or highlight an object.
+Examples: -
+### *Easy*
+
+“The red building at the lower left.”
+“The boat closest to the pier.”
+“The tallest tower on the right.”
+“That curved road near the river.”
+
+### *Moderate*
+
+ “The circular structure surrounded by smaller rooftops.”
+ “Those two vehicles parked parallel to each other.”
+ “The cluster of trees forming a dense patch at the edge.”
+
+### *Hard / Ambiguous*
+
+ “The bridge located near the center of the valley.”
+ “The man with the umbrella standing behind the taxi.”
+ “The section of coastline where the waves look rough.”
+ 
+3.⁠ ⁠VQA_BINARY (Yes/No & True/False Assertions)
+Assign this label if the text is a YES/NO Question OR a Statement that functions as a True/False claim.
+Examples: "Is the car red?", "The car is on the left."
+### *Easy:*
+
+“Is the main building made of brick?”
+“Are there any vehicles on the road?”
+“Does the bridge cross over a river?”
+
+### *Moderate:*
+
+“Is the sky mostly cloudy?”
+“Are the people in the image wearing uniforms?”
+“Is the central object partially obscured?”
+“The car is parked near the entrance.” (Statement → binary claim)
+
+### *Hard / Ambiguous:*
+
+“The large structure at the top is a water tank.”
+"The animal in the field is facing toward the camera.”
+“Is the object highlighted by sunlight taller than the others?”
+“The tower is to the left of the factory.”
+
+4.⁠ ⁠VQA_NUMERIC (Counting, Quantities)
+Assign this label if the text asks for a quantity or a measurement.
+Examples: "How many cars?", "What is the area of the pool?".
+### *Easy:*
+
+“How many people are visible?”
+“Count the number of windows on the main building.”
+“What is the total number of boats?”
+
+### *Moderate:*
+
+“How many separate pathways can be seen from above?”
+“What is the approximate height of the tallest structure?”
+“How many vehicles appear to be moving?”
+“What is the area covered by the playground?”
+
+### *Hard / Ambiguous:*
+
+“Approximately how many small objects are clustered near the center?”
+“Estimate the number of rooftops whose color differs from the others.”
+“How many distinct water bodies can you identify?”
+“What is the ratio of tall to short buildings?”
+
+5.⁠ ⁠VQA_SEMANTIC (Open-Ended)
+Assign this label if the text asks an open-ended question.
+Examples: "What is above the building?", "What is the colour of the car?".
+### *Easy:*
+
+“What is the man holding?”
+“Where is the car parked?”
+“What is above the main building?”
+
+### *Moderate:*
+
+“What activity is taking place in the central area?”
+“Which direction is the train moving?”
+“What type of landscape surrounds the structure?”
+“What is the relationship between the two visible people?”
+
+### *Hard / Ambiguous:*
+
+“What is unusual about the arrangement of the objects here?”
+“Where does the pathway appear to lead?”
+“What could be the purpose of the circular enclosure?”
+“What feature distinguishes the smaller building from the larger one?”
+“Which natural process might have shaped the terrain shown?”
+
+DECISION EXAMPLES: -
+Input: "The solitary windmill in the image is positioned towards the right edge." -> Output: VQA_BINARY
+Input: "Give a detailed description of this image." -> Output: CAPTION
+Input: "The red car located at the top." -> Output: GROUNDING
+Input: "What is the main structure visible?" -> Output: VQA_SEMANTIC
 
 Query: "{query}"
 
 Respond with ONLY ONE of these words: "CAPTION", "GROUNDING", "VQA_BINARY", "VQA_NUMERIC", or "VQA_SEMANTIC". No explanation needed."""
-
     try:
         # Use actual image if provided, otherwise create dummy
         if image is None:

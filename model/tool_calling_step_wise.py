@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 SATELLITE_TOOLS = [
     {
         "name": "detect_objects",
-        "description": "Step 1: Detects objects in the image using SAM3. MUST be called before any comparison or measurement tools.",
+        "description": "Step 1: Detects objects. Returns count and stores attributes (area, shape, orientation, width, height) in memory.",
         "parameters": {
             "type": "object",
             "properties": {
                 "target_class": {
                     "type": "string",
-                    "description": "The object class to detect (e.g., 'building', 'car', 'ship')."
+                    "description": "The object class (e.g., 'building', 'car', 'ship')."
                 }
             },
             "required": ["target_class"]
@@ -31,36 +31,41 @@ SATELLITE_TOOLS = [
     },
     {
         "name": "get_object_info",
-        "description": "Step 2: filters or finds specific objects based on an attribute. Use this to find 'the largest building', 'second smallest car', etc.",
+        "description": "Step 2: Finds a specific object based on a sorting criteria and returns a specific attribute.",
         "parameters": {
             "type": "object",
             "properties": {
-                "attribute": {
+                "sort_attribute": {
                     "type": "string",
                     "enum": ["area", "length", "confidence", "width", "height"],
-                    "description": "The attribute to sort/filter by."
+                    "description": "The attribute to use for ranking/sorting the objects."
                 },
                 "rank_index": {
                     "type": "integer",
-                    "description": "The rank to select (1-based index). 1 = smallest/first, -1 = largest/last, 2 = second smallest, -2 = second largest."
+                    "description": "1 = smallest/first, -1 = largest/last, 2 = second smallest."
+                },
+                "return_attribute": {
+                    "type": "string",
+                    "enum": ["area", "length", "width", "height", "shape", "orientation", "confidence"],
+                    "description": "The actual attribute value to return. If omitted, returns the sort_attribute value."
                 }
             },
-            "required": ["attribute", "rank_index"]
+            "required": ["sort_attribute", "rank_index"]
         }
     },
     {
         "name": "measure_distance",
-        "description": "Step 2/3: Measures the distance between two specific objects identified by their ID or rank index from the detection list.",
+        "description": "Step 2/3: Measures distance between two objects by their ID/Index.",
         "parameters": {
             "type": "object",
             "properties": {
                 "index_1": {
                     "type": "integer",
-                    "description": "The index of the first object (0-based) from the detected list."
+                    "description": "Index of first object."
                 },
                 "index_2": {
                     "type": "integer",
-                    "description": "The index of the second object (0-based) from the detected list."
+                    "description": "Index of second object."
                 }
             },
             "required": ["index_1", "index_2"]
@@ -68,19 +73,20 @@ SATELLITE_TOOLS = [
     },
     {
         "name": "calculator_tool",
-        "description": "Evaluates a mathematical expression to compute totals, ratios, averages, etc.",
+        "description": "Evaluates math expressions (e.g. for averages, sums).",
         "parameters": {
             "type": "object",
             "properties": {
                 "expression": {
                     "type": "string",
-                    "description": "The math expression to evaluate (e.g., '(100+200)/5')."
+                    "description": "Math expression (e.g., '(100+200)/5')."
                 }
             },
             "required": ["expression"]
         }
     }
 ]
+
 
 class SatelliteVQAAgent:
     def __init__(self, vlm_model, vlm_processor, sam_interface=None):
@@ -115,90 +121,89 @@ class SatelliteVQAAgent:
         }
 
     def _detect_objects_wrapper(self, target_class):
-        """
-        Runs SAM and populates self.sam_state.
-        """
         logger.info(f"Running SAM for class: {target_class}")
         result = self.sam.segment_image(self.image, target_class, gsd=self.current_gsd)
         
         if result and result.get("metadata"):
-            # Update State
             self.sam_state["objects"] = result["metadata"]
             self.sam_state["masks"] = result["masks"]
             self.sam_state["count"] = result["count"]
             self.sam_state["image_size"] = result["image_size"]
             
-            # Return a summary to Qwen (not the raw data)
-            return f"Success. Detected {result['count']} instances of '{target_class}'. These are now stored in memory with indices 0 to {result['count']-1}."
+            # Explicitly tell Qwen that attributes are ready
+            return (f"Success. Detected {result['count']} '{target_class}'(s). "
+                    f"Indices: 0 to {result['count']-1}. "
+                    "Attributes available in memory: area, shape, orientation, width, height.")
         else:
             self._reset_state()
             return f"No instances of '{target_class}' were detected."
             
-    def _get_object_info_wrapper(self, attribute, rank_index):
-        """
-        Uses self.sam_state implicitly.
-        Qwen asks for: attribute='area', rank_index=-2 (2nd largest).
-        """
+    def _get_object_info_wrapper(self, sort_attribute, rank_index, return_attribute=None):
         objects = self.sam_state["objects"]
         if not objects:
             return "Error: No objects detected yet. Please call 'detect_objects' first."
 
-        # Map 'area' to specific key if needed, or use directly
+        # Map generic terms to internal keys
         attr_map = {
             "area": "area_m2",
-            "length": "height_m", # Assuming height is length in OBB
+            "length": "height_m", 
             "width": "width_m",
-            "confidence": "confidence"
+            "height": "height_m",
+            "confidence": "confidence",
+            "shape": "shape",
+            "orientation": "orientation_deg"
         }
-        key = attr_map.get(attribute, attribute)
-
-        # Call helper logic (see satellite_vqa_tools.py)
-        selected_obj, info_str = select_object_by_rank(objects, key, rank_index)
         
+        sort_key = attr_map.get(sort_attribute, sort_attribute)
+        return_key = attr_map.get(return_attribute, return_attribute) if return_attribute else sort_key
+
+        selected_obj, info_str = select_object_by_rank(objects, sort_key, rank_index, return_key)
         return info_str
 
     def _measure_distance_wrapper(self, index_1, index_2):
-        """
-        Uses self.sam_state implicitly.
-        Qwen asks for: index_1=0, index_2=3.
-        """
         objects = self.sam_state["objects"]
         if not objects:
             return "Error: No objects detected yet."
             
-        dist_val = calculate_distance_by_indices(objects, index_1, index_2)
+        dist_pixels = calculate_distance_by_indices(objects, index_1, index_2)
+        if dist_pixels is None:
+             return "Error: Invalid indices provided."
+
         dist_meters = dist_pixels * self.current_gsd
-        return f"Distance: {dist_meters:.2f} meters."
+        return f"{dist_meters:.2f}"
 
     def _format_system_prompt(self):
         tools_json = json.dumps(self.tools_schema, indent=2)
         
-        prompt = f"""You are a Satellite Imagery Analysis Agent.
-        
-        You have access to a set of TOOLS.
-        state: The system maintains an internal memory of detected objects. 
+        prompt = f"""You are a Satellite Analysis Agent. 
+        You have access to tools to analyze images.
         
         TOOLS:
         {tools_json}
 
-        INSTRUCTIONS:
-        1. Always detect objects first if the question implies specific items (cars, buildings).
-        2. Once detected, refer to objects by their implied properties (rank, size) using 'get_object_info'.
-        3. Do NOT try to estimate coordinates or areas yourself. Use the tools.
-        4. If you need a tool, output a JSON object with "tool" and "arguments".
-        
+        CRITICAL OUTPUT RULES:
+        1. If the user asks for a specific attribute (e.g. "What is the shape?"), use 'get_object_info' to retrieve it.
+        2. Do NOT guess attributes. Use the tools.
+        3. FINAL ANSWER FORMAT: 
+           - Numeric questions: Return ONLY the number (e.g. "450.5").
+           - Binary questions: Return ONLY "Yes" or "No".
+           - Semantic questions: Return ONLY the single word or short phrase (e.g., "Rectangle", "North").
+           - Do not write full sentences in the final answer.
+
         Example Flow:
-        User: "How big is the second largest building?"
+        User: "What is the shape of the largest building?"
         Step 1: {{ "tool": "detect_objects", "arguments": {{ "target_class": "building" }} }}
-        Obs: Success. Detected 15 buildings.
-        Step 2: {{ "tool": "get_object_info", "arguments": {{ "attribute": "area", "rank_index": -2 }} }}
+        Obs: Success. Detected 5 buildings. Attributes available.
+        Step 2: {{ "tool": "get_object_info", "arguments": {{ "sort_attribute": "area", "rank_index": -1, "return_attribute": "shape" }} }}
+        Obs: rectangle
+        Final Answer: rectangle
         """
         return prompt
 
-    def run(self, image: Image.Image, user_query: str, gsd: float = 1.0, metadata: Dict = {}, max_steps: int = 5):
+    def run(self, image: Image.Image, user_query: str, gsd: float = 1.0, max_steps: int = 5):
         self.image = image
         self.current_gsd = gsd
-        self._reset_state() # Clear previous query state
+        self._reset_state()
         
         system_prompt_text = self._format_system_prompt()
         
@@ -236,21 +241,19 @@ class SatelliteVQAAgent:
             
             if tool_result:
                 messages.append({"role": "assistant", "content": [{"type": "text", "text": output_text}]})
-                
-                # Format observation
                 observation_text = f"Observation from tool '{tool_result['tool']}': {tool_result['result']}"
                 messages.append({"role": "user", "content": [{"type": "text", "text": observation_text}]})
-                
                 logger.info(f"[System]: {observation_text}")
             else:
+                # Final clean up to ensure no punctuation or filler remains if Qwen forgets
+                clean_answer = output_text.strip().rstrip('.')
                 return {
-                    "final_answer": output_text,
+                    "final_answer": clean_answer,
                     "steps_taken": step + 1
                 }
 
         return {"error": "Max steps reached without final answer."}
-        
-
+    
     def _parse_and_execute_tool(self, text: str):
         try:
             json_match = re.search(r"\{.*\}", text, re.DOTALL)
@@ -290,6 +293,7 @@ if __name__ == "__main__":
     print("Agent setup complete")
 
 '''
+
 
 
 

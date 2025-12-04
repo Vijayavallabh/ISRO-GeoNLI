@@ -9,6 +9,7 @@ accelerate>=1.0.0
 
 # VLM Utilities
 qwen-vl-utils>=0.0.8
+peft
 
 # Computer Vision & Image Processing
 opencv-python>=4.10.0

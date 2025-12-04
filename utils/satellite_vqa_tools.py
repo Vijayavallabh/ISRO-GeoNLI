@@ -1,27 +1,25 @@
 import math
 from typing import List, Tuple, Union, Dict, Any
 
-def select_object_by_rank(objects_list: List[Dict], attribute_key: str, rank_index: int):
+def select_object_by_rank(objects_list: List[Dict], sort_key: str, rank_index: int, return_key: str = None):
     """
-    Sorts the object list by the given attribute and returns the object at rank_index.
+    Sorts objects by `sort_key`, but returns the value of `return_key`.
     
     Args:
-        objects_list: The list of object dicts from SAM state.
-        attribute_key: The key to sort by (e.g., 'area_m2', 'confidence').
-        rank_index: 1-based index. Positive for ascending (smallest first), 
-                    Negative for descending (largest first).
-                    e.g., 1 = smallest, -1 = largest, -2 = second largest.
+        objects_list: List of object dicts from SAM.
+        sort_key: Attribute to sort by (e.g., 'area_m2').
+        rank_index: 1 (smallest), -1 (largest), etc.
+        return_key: Attribute to return (e.g., 'shape'). If None, returns sort_key value.
     """
-    # Filter out objects that might lack the key
-    valid_objects = [obj for obj in objects_list if attribute_key in obj]
+    # Filter objects that have the sort key
+    valid_objects = [obj for obj in objects_list if sort_key in obj]
     
     if not valid_objects:
-        return None, f"No objects found with attribute '{attribute_key}'."
+        return None, f"No objects found with attribute '{sort_key}'."
 
     # Sort ascending
-    sorted_objs = sorted(valid_objects, key=lambda x: x[attribute_key])
+    sorted_objs = sorted(valid_objects, key=lambda x: x[sort_key])
 
-    
     try:
         if rank_index > 0:
             # 1st smallest -> index 0
@@ -36,15 +34,21 @@ def select_object_by_rank(objects_list: List[Dict], attribute_key: str, rank_ind
 
         selected_obj = sorted_objs[idx]
         
-        # We return the object, plus a pre-formatted string for the Agent to read
-        val = selected_obj[attribute_key]
+        # Determine what to return
+        key_to_fetch = return_key if return_key else sort_key
+        val = selected_obj.get(key_to_fetch, "N/A")
         obj_id = selected_obj.get('mask_id', 'unknown')
         
-        return selected_obj, f"Found the {abs(rank_index)}-th {desc} object (ID: {obj_id}) with {attribute_key} = {val:.2f}."
+        # Format for float values to keep it clean
+        if isinstance(val, float):
+            val_str = f"{val:.2f}"
+        else:
+            val_str = str(val)
+
+        return selected_obj, f"{val_str}"
         
     except IndexError:
         return None, f"Rank {rank_index} is out of bounds. Only found {len(sorted_objs)} objects."
-
 
 def calculate_distance_by_indices(objects_list: List[Dict], idx1: int, idx2: int):
     """
@@ -56,7 +60,6 @@ def calculate_distance_by_indices(objects_list: List[Dict], idx1: int, idx2: int
     obj_a = objects_list[idx1]
     obj_b = objects_list[idx2]
 
-    
     def get_centroid(coords):
         xs = coords[0::2]
         ys = coords[1::2]
@@ -69,9 +72,6 @@ def calculate_distance_by_indices(objects_list: List[Dict], idx1: int, idx2: int
     return dist_pixels
     
 def calculator_tool(expression: str) -> Union[float, str]:
-    """
-    Evaluates a mathematical expression (Same as before).
-    """
     allowed_names = {"sqrt": math.sqrt, "abs": abs, "round": round, "min": min, "max": max, "pow": pow}
     safe_expression = expression.replace('^', '**')
     try:
@@ -83,3 +83,4 @@ def calculator_tool(expression: str) -> Union[float, str]:
         return float(result)
     except Exception as e:
         return f"Error computing expression: {e}"
+
