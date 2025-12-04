@@ -1,10 +1,10 @@
-# Core ML dependencies
-torch>=2.6.0
-torchvision>=0.21.0
+# Core ML Libraries
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch
+torchvision
 
-# Transformers MUST be installed from source for Qwen3-VL/SAM3 support
-# The standard 'pip install transformers' does not yet have these classes.
-git+https://github.com/huggingface/transformers.git
+# Bleeding Edge for transformers
+transformers @ git+https://github.com/huggingface/transformers
 accelerate>=1.0.0
 
 # VLM Utilities
@@ -23,9 +23,11 @@ numpy>=1.26.0
 matplotlib>=3.9.0
 seaborn>=0.13.0
 
-# Experiment Tracking & Config
-wandb>=0.17.0       # Required by eval.py
-python-dotenv>=1.0.0 # Required by eval.py
+# Tracking & Config
+wandb>=0.17.0
+python-dotenv>=1.0.0
+tokenizers
+bitsandbytes
 
 # Utilities
 requests>=2.32.0
