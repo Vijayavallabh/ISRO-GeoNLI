@@ -7,7 +7,10 @@ from routers.getHistory import router as messages_router
 
 app = FastAPI()
 
-origins = ["http://localhost:5173"]
+origins = [
+    "https://isrogeonli.in",
+    "https://www.isrogeonli.in"
+]
 
 app.add_middleware(
     CORSMiddleware,
