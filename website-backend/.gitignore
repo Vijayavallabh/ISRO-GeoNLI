@@ -1,1 +1,51 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+prod_env/
+venv/
+.venv/
+
+# Environment variables
 .env
+model/.env
+
+# Log files
+logs/
+*.log
+app.log
+
+# ipynb notebooks and related
+.ipynb_checkpoints/
+
+# Node modules
+node_modules/
+website-frontend/node_modules/
+website-backend/node_modules/
+
+# Next.js build output
+website-frontend/.next/
+website-frontend/out/
+website-frontend/build/
+website-frontend/dist/
+
+# Environment files (frontend)
+website-frontend/.env*.local
+website-frontend/.env.development
+website-frontend/.env.production
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Testing
+website-frontend/coverage/
+website-frontend/.nyc_output/
