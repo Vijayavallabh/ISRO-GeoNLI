@@ -6,61 +6,6 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-
-# def annotate_image_with_boxes(image, obbs):
-#     """
-#     Draw oriented bounding boxes with IDs on image.
-    
-#     Args:
-#         image: PIL Image
-#         obbs: List of OBBs in format ((cx, cy), (w, h), angle)
-        
-#     Returns:
-#         tuple: (annotated_image, id_map)
-#             - annotated_image: PIL Image with annotations
-#             - id_map: Dict mapping ID to OBB
-#     """
-#     annotated_img = image.copy()
-#     draw = ImageDraw.Draw(annotated_img)
-    
-#     # Load font
-#     try:
-#         font = ImageFont.truetype("arial.ttf", size=20)
-#     except:
-#         font = ImageFont.load_default()
-    
-#     id_map = {}
-    
-#     for idx, obb in enumerate(obbs, start=1):
-#         if obb is None:
-#             continue
-        
-#         # Get box corner points
-#         box_points = cv2.boxPoints(obb)
-#         box_points = np.int32(box_points)
-        
-#         # Draw polygon (red outline)
-#         polygon = [tuple(pt) for pt in box_points]
-#         draw.polygon(polygon, outline="red", width=3)
-        
-#         # Draw ID label with background
-#         center_x, center_y = obb[0]
-#         text = str(idx)
-        
-#         # Calculate text background box
-#         bbox = draw.textbbox((center_x, center_y), text, font=font)
-#         draw.rectangle(
-#             (bbox[0]-2, bbox[1]-2, bbox[2]+2, bbox[3]+2),
-#             fill="white",
-#             outline="red"
-#         )
-#         draw.text((center_x, center_y), text, fill="black", 
-#                  font=font, anchor="mm")
-        
-#         id_map[idx] = obb
-    
-#     return annotated_img, id_map
-
 def annotate_image_with_boxes(image, obbs):
     """
     Draw oriented bounding boxes with IDs on image.
