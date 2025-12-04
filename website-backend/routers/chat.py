@@ -124,7 +124,8 @@ async def chat_endpoint(
 
     instruction = {
         "query":query,
-        "image_url":image
+        "image_url":image,
+        "spatial_resolution_m":spatial_resolution_m
     }
     print(instruction)
     data = await call_external_api(instruction)

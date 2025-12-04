@@ -8,8 +8,7 @@ from routers.getHistory import router as messages_router
 app = FastAPI()
 
 origins = [
-    "https://isrogeonli.in",
-    "https://www.isrogeonli.in"
+    "https://isrogeonli.in:5173",
 ]
 
 app.add_middleware(
