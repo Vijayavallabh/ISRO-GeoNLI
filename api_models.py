@@ -81,3 +81,4 @@ class SimpleRequest(BaseModel):
     image_url: Optional[str] = None
     image_base64: Optional[str] = None
     image_path: Optional[str] = None  # Local file system path
+    spatial_resolution_m: float

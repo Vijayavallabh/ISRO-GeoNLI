@@ -32,6 +32,8 @@ JWT_ALGORITHM = "HS256"
 
 security = HTTPBearer()
 
+AI_SERVER_URL = os.getenv("AI_SERVER_URL", "http://localhost:8080")
+
 async def get_current_user_email(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
     try:
@@ -47,7 +49,6 @@ async def get_current_user_email(credentials: HTTPAuthorizationCredentials = Dep
 async def chat_endpoint(
     session_id: str = Form(...),
     query: str = Form(...),
-    query_type: str = Form(...),
     spatial_resolution_m: float = Form(...),
     image_url: str | None = Form(None),
     image: UploadFile | None = File(None),
@@ -55,12 +56,14 @@ async def chat_endpoint(
 ):
     if(image):
         contents = await image.read()
-        img = Image.open(BytesIO(contents))
-        width, height = img.size
 
     existing_session = await sessions_collection.find_one({"sessionId": session_id})
 
     if not existing_session:
+        if not image:
+            raise HTTPException(status_code=400, detail="Image required for new session")
+        
+        image_filename = image.filename or 'image.jpg'
         file_name = f"{int(time())}_{image.filename}"
         s3_client.upload_fileobj(
             BytesIO(contents),
@@ -86,52 +89,103 @@ async def chat_endpoint(
     })
 
     result = await sessions_collection.find_one({"sessionId":session_id})
-    image = result["imageURL"]
+    if not result:
+        raise HTTPException(status_code=404, detail="Session not found")
+    image_url_db = result["imageURL"]
+    if not image_url_db:
+        raise HTTPException(status_code=400, detail="No image URL found for session")
 
-    response = requests.get(image)
-    img = Image.open(BytesIO(response.content))
-    width, height = img.size
-
-    instruction = {
-        "query":query,
-        "query_type":query_type,
-        "spatial_resolution_m":spatial_resolution_m,
-        "image_url":image,
-        "width":width,
-        "height":height
+    ai_request = {
+        "query": query,
+        "image_url": image_url_db
     }
+    bot_text = "Sorry, I couldn't process that."
+    bot_image_url = None
 
-    bot_reply = {"text":"This is test bot response.", "image":image}
-
-    ai_image_url = None
-    if bot_reply["image"]:
-        base64_str = bot_reply["image"]
-        if base64_str.startswith("data:image"):
-            base64_str = base64_str.split(",", 1)[1]
-        image_bytes = base64.b64decode(base64_str)
-        file_name = f"ai_{int(time())}.png"
-        s3_client.upload_fileobj(
-            BytesIO(image_bytes),
-            BUCKET,
-            file_name,
-            ExtraArgs={"ACL": "public-read", "ContentType": "image/png"}
+    try:
+        print(f"Calling AI server /query endpoint with query: {query[:50]}...")
+        ai_response = requests.post(
+            f"{AI_SERVER_URL}/query",
+            json=ai_request,
+            timeout=240  # officially, 3 minute window to get responses
         )
-        ai_image_url = f"https://{BUCKET}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{file_name}"
+        ai_response.raise_for_status()
+        ai_data = ai_response.json()
+
+        results = ai_data.get("results", {})
+
+        if "caption" in results:
+            bot_text = results["caption"]["response"]
+        
+        elif "grounding" in results:
+            grounding = results["grounding"]
+            box_text = grounding.get("detections", [])
+            
+            # If AI returned an annotated image (base64), upload it to S3
+            annotated_image_b64 = grounding.get("annotated_image")
+            if annotated_image_b64:
+                # Strip data URL prefix if present
+                if "base64," in annotated_image_b64:
+                    b64_str = annotated_image_b64.split("base64,")[1]
+                else:
+                    b64_str = annotated_image_b64
+
+                try:
+                    annotated_bytes = base64.b64decode(b64_str)
+                    file_name = f"ai_grounding_{int(time())}.png"
+                    
+                    s3_client.upload_fileobj(
+                        BytesIO(annotated_bytes),
+                        BUCKET,
+                        file_name,
+                        ExtraArgs={"ACL": "public-read", "ContentType": "image/png"}
+                    )
+                    bot_image_url = f"https://{BUCKET}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{file_name}"
+                except Exception as e:
+                    print(f"Error uploaing annotate image to S3: {e}")
+            
+        elif "attributes" in results:
+            # Check which attribute type has a response
+            attrs = results["attributes"]
+            if "binary" in attrs:
+                bot_text = str(attrs["binary"]["response"])
+            elif "numeric" in attrs:
+                bot_text = str(attrs["numeric"]["response"])
+            elif "semantic" in attrs:
+                bot_text = str(attrs["semantic"]["response"])
+
+    
+    except requests.exceptions.Timeout:
+        print(f"AI Server timeout after 240 seconds")
+        bot_text = "The AI model is taking too long to respond. Please try again."
+    
+        except requests.exceptions.ConnectionError:
+        print(f"AI Server connection error")
+        bot_text = "Unable to connect to AI server. Please check if the server is running."
+
+    except requests.exceptions.RequestException as e:
+        print(f"AI Server Error: {e}")
+        bot_text = f"Error connecting to AI model: {str(e)}"
+
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        traceback.print_exc()
+        bot_text = f"Error processing request: {str(e)}"
 
     await messages_collection.insert_one({
         "sessionId": session_id,
         "role": "assistant",
         "type":"text",
-        "content": bot_reply["text"],
+        "content": bot_text,
         "timestamp": int(time())
     })
-    if ai_image_url:
+    if bot_image_url:
         await messages_collection.insert_one({
             "sessionId": session_id,
             "role": "assistant",
             "type":"image",
-            "content": ai_image_url,
+            "content": bot_image_url,
             "timestamp": int(time())
         })
 
-    return {"reply": bot_reply["text"],"image":ai_image_url, "response": instruction}
+    return {"reply": bot_text,"image":bot_image_url}

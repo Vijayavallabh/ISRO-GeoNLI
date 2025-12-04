@@ -22,6 +22,15 @@ interface ChatWindowProps {
 export default function ChatWindow({ messages, onSendMessage, isLoading }: ChatWindowProps) {
   const [input, setInput] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
+
+  const checkIfNearBottom = () => {
+    if (!messagesContainerRef.current) return true
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current
+    const threshold = 100 // pixels from bottom
+    return scrollHeight - scrollTop - clientHeight < threshold
+  }
 
   useEffect(() => {
     if (shouldAutoScroll || checkIfNearBottom()) {
@@ -39,6 +48,7 @@ export default function ChatWindow({ messages, onSendMessage, isLoading }: ChatW
     if (input.trim()) {
       onSendMessage(input)
       setInput("")
+      setShouldAutoScroll(checkIfNearBottom())
     }
   }
 
@@ -51,7 +61,11 @@ export default function ChatWindow({ messages, onSendMessage, isLoading }: ChatW
   return (
     <div className="flex flex-col h-full">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 border border-border rounded-lg m-4">
+      <div
+      ref={messageContainerRef}
+      onScoll={handleScroll} 
+      className="flex-1 overflow-y-auto p-6 border border-border rounded-lg m-4"
+      >
         <div className="max-w-xl mx-auto space-y-4">
           {messages.length === 0 ? (
             <div className="h-full flex items-center justify-center text-center">
@@ -69,7 +83,7 @@ export default function ChatWindow({ messages, onSendMessage, isLoading }: ChatW
                 <div
                   className={`p-3 rounded-lg ${msg.role === "user" ? "bg-blue-100 text-foreground" : "bg-muted text-foreground"}`}
                 >
-                  <p className="text-sm">{msg.text}</p>
+                  <p className="text-sm whitespace-pre-wrap break-words">{msg.text}</p>
                   {msg.image && (
                     <img
                       src={msg.image || "/placeholder.svg"}

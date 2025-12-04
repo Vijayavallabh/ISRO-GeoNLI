@@ -129,6 +129,9 @@ async def process_structured(request: StructuredRequest):
     image = get_image_from_input(request.input_image)
     
     # Process each query type
+    gsd = 1 # Is there a way to make it compulsory?
+    if request.input_image.metadata and request.input_image.metadata.spatial_resolution_m:
+        gsd = request.input_image.metadata.spatial_resolution_m
     results = {
         "image_id": request.input_image.image_id,
         "metadata": request.input_image.metadata.dict() if request.input_image.metadata else None,
@@ -169,7 +172,7 @@ async def process_structured(request: StructuredRequest):
         
         if request.queries.attribute_query.binary:
             instruction = request.queries.attribute_query.binary["instruction"]
-            raw_answer = pipeline.answer_question(image, instruction, question_type="binary")
+            raw_answer = pipeline.answer_question(image, instruction, question_type="binary", gsd=gsd)
             # Normalize to yes/no
             answer = normalize_vqa_answer(raw_answer, "binary")
             attr_results["binary"] = {
@@ -180,7 +183,7 @@ async def process_structured(request: StructuredRequest):
         
         if request.queries.attribute_query.numeric:
             instruction = request.queries.attribute_query.numeric["instruction"]
-            raw_answer = pipeline.answer_question(image, instruction, question_type="numeric")
+            raw_answer = pipeline.answer_question(image, instruction, question_type="numeric", gsd=gsd)
             # Normalize to float
             answer = normalize_vqa_answer(raw_answer, "numeric")
             attr_results["numeric"] = {
@@ -191,7 +194,7 @@ async def process_structured(request: StructuredRequest):
         
         if request.queries.attribute_query.semantic:
             instruction = request.queries.attribute_query.semantic["instruction"]
-            answer = pipeline.answer_question(image, instruction, question_type="semantic")
+            answer = pipeline.answer_question(image, instruction, question_type="semantic", gsd=gsd)
             attr_results["semantic"] = {
                 "instruction": instruction,
                 "response": answer,
@@ -219,10 +222,13 @@ async def process_simple_query(request: SimpleRequest):
         image_url=request.image_url,
         image_base64=request.image_base64,
         image_path=request.image_path
+        metadata=ImageMetaata(spatial_resolution_m=request.spatial_resolution_m) if request.spatial_resolution_m else None
     )
     
     # Load the actual image
     image = get_image_from_input(input_image)
+
+    gsd = request.spatial_resolution_m if request.spatial_resolution_m 
     
     # Classify the query with the actual image for better context
     classified_queries = classify_query(request.query, image=image)
@@ -236,7 +242,7 @@ async def process_simple_query(request: SimpleRequest):
     structured = StructuredRequest(input_image=input_image, queries=queries)
     
     # Process through unified endpoint
-    return await process_structured(structured)
+    return await process_structured(structured, gsd)
 
 
 # ============================================================================

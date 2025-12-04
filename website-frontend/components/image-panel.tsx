@@ -15,7 +15,7 @@ interface ImagePanelProps {
 export default function ImagePanel({ 
   image, 
   onUpload, 
-  spatialResolution = 10.0,
+  spatialResolution = 1, /* Is there a way to keep this compulsory?*/
   onSpatialResolutionChange 
 }: ImagePanelProps) {
   return (

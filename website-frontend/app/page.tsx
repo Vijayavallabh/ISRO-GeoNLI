@@ -37,7 +37,7 @@ export default function Home() {
   const [token, setToken] = useState<string | null>(null)
   const [isInitializing, setIsInitializing] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [spatialResolution, setSpatialResolution] = useState<number>(10.0)  // ADD THIS
+  const [spatialResolution, setSpatialResolution] = useState<number>(1.0)  // ADD THIS
 
   useEffect(() => {
     const storedToken = localStorage.getItem("token")

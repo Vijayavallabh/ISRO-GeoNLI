@@ -7,7 +7,11 @@ from routers.getHistory import router as messages_router
 
 app = FastAPI()
 
-origins = ["http://localhost:5173"]
+origins = [
+    "http://localhost:3000",  # Next.js default
+    "http://localhost:5173",  # Vite default (if needed)
+    "http://localhost:3001"   # Alternative Next.js port
+]
 
 app.add_middleware(
     CORSMiddleware,
