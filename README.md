@@ -35,13 +35,28 @@ This project uses `uv` for managing Python virtual environments and dependencies
    cd VRSBench
    unzip Images_train.zip
    unzip Images_val.zip
+   unzip Annotations_train.zip
+   unzip ANnotations_val.zip
    ```
+
+## Important
+Navigate to VRSBench folder and then in Annotations_train folder, go to P0212_0000.json which has the last qa pair ques_id as "", change it to 5. Then go to Annotations_val folder, go to P1732_0000.json has first qa pair ques_id as "1", change it to integer.
+
+### Train MLP Adapter of Qwen-3 using LLaVA-PreTrain Dataset
+
+```bash
+torchrun \
+    --nproc_per_node=1 \
+    --master_port=29500 \
+    train.py
+    
+```
 
 ### Create and Activate Virtual Environment
 
 1. Create a virtual environment using `uv`:
    ```bash
-   uv venv
+   uv venv --python 3.11.9
    ```
    This creates a `.venv` directory in the project root.
 
@@ -70,6 +85,7 @@ This project uses `uv` for managing Python virtual environments and dependencies
   uv sync
   ```
 - To add new dependencies:
+
   ```bash
   uv add package-name
   ```
