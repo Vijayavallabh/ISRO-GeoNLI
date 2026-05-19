@@ -52,14 +52,16 @@ def build_vlm_model(
     print(f"Loading Base Model Weights: {base_model_id}...")
 
     # 3. Load the Base Model first
+    # Use eager attention to avoid FlashAttention compatibility issues on older drivers
     try:
         model = Qwen3VLForConditionalGeneration.from_pretrained(
-            base_model_id, 
-            torch_dtype="auto", 
+            base_model_id,
+            torch_dtype="auto",
             device_map="auto",
-            trust_remote_code=True, 
+            trust_remote_code=True,
             dtype=torch_dtype,
-            token=hf_token
+            token=hf_token,
+            attn_implementation="eager",
         )
     except Exception as e1:
         # Fallback to AutoModelForVision2Seq
@@ -69,23 +71,25 @@ def build_vlm_model(
                 trust_remote_code=True,
                 torch_dtype=torch_dtype,
                 device_map=device_map if device_map else device,
-                token=hf_token
+                token=hf_token,
+                attn_implementation="eager",
             )
             print(f"Loaded as AutoModelForVision2Seq")
         except Exception as e2:
             raise RuntimeError(f"Failed to load Base Model: {e1}")
     
-    # 4. Load and Apply your Fine-Tuned Adapter
+    # 4. Load and Apply your Fine-Tuned Adapter (optional fallback to base model)
     print(f"Loading LoRA Adapter: {model_id}...")
+    adapter_loaded = False
     try:
         model = PeftModel.from_pretrained(
-            model, 
-            model_id, ## Change to local path having weights
+            model,
+            model_id,
             token=hf_token
         )
+        adapter_loaded = True
     except Exception as e:
-        print("Adapter load failed")
-        raise RuntimeError(f"Could not load adapter.")
+        print(f"Adapter load failed ({e}). Falling back to base model only.")
 
     # Set to eval mode
     model.eval()
