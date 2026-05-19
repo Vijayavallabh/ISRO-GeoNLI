@@ -25,6 +25,7 @@ class CaptioningTask(TaskBase):
         prompt_template: str = "default_caption",
         max_tokens: int = 512,
         temperature: float = 0.0,
+        **kwargs,
     ):
         self.vlm = vlm
         self.prompt_template = prompt_template

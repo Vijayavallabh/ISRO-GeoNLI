@@ -36,6 +36,7 @@ from geonli.core.config import ExperimentConfig
 import geonli.models    # noqa: F401
 import geonli.tasks     # noqa: F401
 import geonli.datasets  # noqa: F401
+import geonli.prompts   # noqa: F401
 
 # Optional: trigger adapter imports only if ISRO code is available
 try:

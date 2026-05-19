@@ -23,23 +23,30 @@ def build_pipeline_from_config(cfg: ExperimentConfig):
     vlm_cfg = cfg.models.get("vlm")
     seg_cfg = cfg.models.get("segmenter")
 
-    vlm = get_vlm(vlm_cfg.name, **{**vlm_cfg.model_dump(), **vlm_cfg.extra}) if vlm_cfg else None
-    segmenter = get_segmenter(seg_cfg.name, **{**seg_cfg.model_dump(), **seg_cfg.extra}) if seg_cfg else None
+    vlm_kwargs = {k: v for k, v in vlm_cfg.model_dump().items() if k != "name"}
+    vlm_kwargs.update(vlm_cfg.extra)
+    vlm = get_vlm(vlm_cfg.name, **vlm_kwargs) if vlm_cfg else None
+
+    seg_kwargs = {k: v for k, v in seg_cfg.model_dump().items() if k != "name"}
+    seg_kwargs.update(seg_cfg.extra)
+    segmenter = get_segmenter(seg_cfg.name, **seg_kwargs) if seg_cfg else None
 
     # -- Tasks ------------------------------------------------------------
     tasks = []
     for t_cfg in cfg.tasks:
         if not t_cfg.enabled:
             continue
+        t_kwargs = {k: v for k, v in t_cfg.model_dump().items() if k not in ("name", "enabled")}
+        t_kwargs.pop("extra", None)
         if t_cfg.name == "captioning":
-            tasks.append(get_task("captioning", vlm=vlm, **t_cfg.model_dump()))
+            tasks.append(get_task("captioning", vlm=vlm, **t_kwargs))
         elif t_cfg.name == "grounding":
-            tasks.append(get_task("grounding", vlm=vlm, segmenter=segmenter, **t_cfg.model_dump()))
+            tasks.append(get_task("grounding", vlm=vlm, segmenter=segmenter, **t_kwargs))
         elif t_cfg.name == "vqa":
-            tasks.append(get_task("vqa", vlm=vlm, segmenter=segmenter, **t_cfg.model_dump()))
+            tasks.append(get_task("vqa", vlm=vlm, segmenter=segmenter, **t_kwargs))
         else:
             # Generic lookup via registry
-            tasks.append(get_task(t_cfg.name, vlm=vlm, segmenter=segmenter, **t_cfg.model_dump()))
+            tasks.append(get_task(t_cfg.name, vlm=vlm, segmenter=segmenter, **t_kwargs))
 
     return DefaultGeoNLIPipeline(tasks=tasks, vlm=vlm, segmenter=segmenter)
 
@@ -48,7 +55,9 @@ def run_inference(cfg: ExperimentConfig):
     pipeline = build_pipeline_from_config(cfg)
     dataset = None
     if cfg.dataset:
-        dataset = get_dataset(cfg.dataset.name, **cfg.dataset.model_dump())
+        ds_kwargs = {k: v for k, v in cfg.dataset.model_dump().items() if k != "name"}
+        ds_kwargs.pop("extra", None)
+        dataset = get_dataset(cfg.dataset.name, **ds_kwargs)
 
     if dataset is None:
         print("No dataset configured. Use --config with a dataset section.")
