@@ -128,7 +128,6 @@ class ISRO_VLM(TransformersVLMBase):
         }
         if temperature > 0:
             gen_kwargs["temperature"] = temperature
-            gen_kwargs["top_k"] = -1
 
         with torch.no_grad():
             generated_ids = self.model.generate(**inputs, **gen_kwargs)
