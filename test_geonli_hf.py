@@ -11,7 +11,7 @@ from PIL import Image
 # Ensure repo root is on path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from geonli import get_vlm, get_segmenter, get_task, get_prompt
+from geonli import get_vlm, get_segmenter, get_task
 from geonli.core.pipeline_impl import DefaultGeoNLIPipeline
 from geonli.prompts.manager import PromptManager
 import geonli
