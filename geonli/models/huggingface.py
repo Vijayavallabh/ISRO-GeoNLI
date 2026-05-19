@@ -52,6 +52,7 @@ class HuggingFaceVLM(TransformersVLMBase):
         architecture: Optional[str] = None,
         trust_remote_code: bool = True,
         hf_token_env: str = "HF_TOKEN",
+        attn_implementation: Optional[str] = None,
         **kwargs,
     ):
         self.model_id = model_id
@@ -60,6 +61,7 @@ class HuggingFaceVLM(TransformersVLMBase):
         self.arch = _detect_architecture(model_id, architecture)
         self.trust_remote_code = trust_remote_code
         self._hf_token = os.getenv(hf_token_env) or os.getenv("HUGGING_FACE_HUB_TOKEN")
+        self.attn_implementation = attn_implementation or "eager"
 
         # These are populated lazily
         self.model = None
@@ -101,18 +103,46 @@ class HuggingFaceVLM(TransformersVLMBase):
             **auth,
         )
 
-        self.model = AutoVLM.from_pretrained(
-            self.model_id,
-            torch_dtype=torch_dtype,
-            device_map="auto" if self.device == "cuda" else None,
-            trust_remote_code=self.trust_remote_code,
+        load_kwargs = {
+            "torch_dtype": torch_dtype,
+            "trust_remote_code": self.trust_remote_code,
             **auth,
-        )
+        }
+        if self.attn_implementation:
+            load_kwargs["attn_implementation"] = self.attn_implementation
+
+        # Resolve device_map (handle heterogeneous multi-GPU setups)
+        device_map, max_memory = self._resolve_device_map()
+        if device_map is not None:
+            load_kwargs["device_map"] = device_map
+        if max_memory is not None:
+            load_kwargs["max_memory"] = max_memory
+
+        try:
+            self.model = AutoVLM.from_pretrained(self.model_id, **load_kwargs)
+        except RuntimeError as e:
+            if "FlashAttention" in str(e):
+                print(f"[HuggingFaceVLM] FlashAttention failed, retrying with eager attention...")
+                load_kwargs["attn_implementation"] = "eager"
+                self.model = AutoVLM.from_pretrained(self.model_id, **load_kwargs)
+            else:
+                raise
+
         if self.device == "cpu":
             self.model = self.model.to("cpu")
 
         self._is_loaded = True
         print(f"[HuggingFaceVLM] Loaded on {self.device}.")
+
+    def _resolve_device_map(self):
+        import torch
+        if self.device == "cpu":
+            return None, None
+        if self.device.startswith("cuda:"):
+            return {"": self.device}, None
+        # Default to a single large GPU for stability; users can override via
+        # config extra: {device_map: "auto"} if they want multi-GPU sharding.
+        return {"": "cuda:0"}, None
 
     # ------------------------------------------------------------------
     # VLMBase.query() — single-turn

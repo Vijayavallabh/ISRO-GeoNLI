@@ -92,6 +92,7 @@ class VQATask(TaskBase):
         binary_prompt_template: str = "vqa_binary",
         semantic_prompt_template: str = "vqa_semantic",
         max_tokens: int = 128,
+        **kwargs,
     ):
         self.vlm = vlm
         self.segmenter = segmenter

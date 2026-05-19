@@ -70,6 +70,7 @@ class GroundingTask(TaskBase):
         fallback_to_vlm: bool = True,
         score_threshold: float = 0.4,
         show_visualization: bool = False,
+        **kwargs,
     ):
         self.vlm = vlm
         self.segmenter = segmenter
