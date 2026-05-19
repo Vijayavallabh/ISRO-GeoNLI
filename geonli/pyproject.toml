@@ -5,23 +5,38 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "geonli"
 version = "0.1.0"
-description = "Flexible remote sensing toolkit for Captioning, Grounding, and VQA"
+description = "A flexible, pip-installable toolkit for remote-sensing image captioning, grounding, and VQA with pluggable VLMs and segmenters."
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
     {name = "ISRO-GeoNLI Team"}
 ]
 requires-python = ">=3.9"
-keywords = ["remote-sensing", "VLM", "SAM", "captioning", "grounding", "VQA"]
+keywords = [
+    "remote-sensing",
+    "vision-language-model",
+    "VLM",
+    "SAM",
+    "SAM3",
+    "segment-anything",
+    "captioning",
+    "grounding",
+    "VQA",
+    "oriented-bounding-box",
+    "OBB",
+]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
 ]
 
 dependencies = [
@@ -39,16 +54,17 @@ torch = [
 ]
 transformers = [
     "transformers>=4.40",
-    "accelerate",
-    "qwen-vl-utils",
+    "accelerate>=0.20.0",
+    "qwen-vl-utils>=0.0.8",
 ]
 sam = [
     "opencv-python>=4.8",
+    "matplotlib>=3.8",
 ]
 dev = [
-    "pytest",
-    "black",
-    "ruff",
+    "pytest>=7.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
 ]
 all = [
     "geonli[torch,transformers,sam,dev]"
@@ -60,7 +76,18 @@ geonli-run = "geonli.cli.run:main"
 [project.urls]
 Homepage = "https://github.com/your-org/geonli"
 Repository = "https://github.com/your-org/geonli"
+Documentation = "https://github.com/your-org/geonli#readme"
+Issues = "https://github.com/your-org/geonli/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["geonli*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

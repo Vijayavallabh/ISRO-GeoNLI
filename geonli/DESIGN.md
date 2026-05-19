@@ -1,175 +1,272 @@
-# GeoNLI Package Design Document
+# GeoNLI Design Document
 
 ## Goal
-Transform the monolithic ISRO-GeoNLI pipeline into a pip-installable, pluggable package that supports:
-- **Any VLM** (Qwen3-VL, LLaVA, InternVL, GPT-4V, Gemini, etc.)
-- **Any segmentation / grounding model** (SAM3, SAM2, SAM, Grounding-DINO, etc.)
-- **Any dataset** (via registry & configurable loaders)
-- **Any setup** (local GPU, API-only, mixed, edge devices)
+
+A pip-installable, pluggable Python package for remote-sensing image analysis that supports **any HuggingFace VLM**, **any segmenter**, **any dataset**, and **any setup** — all driven by a single YAML config file.
+
+**Status:** Implemented and tested on A100 with `Qwen/Qwen3-VL-8B-Instruct` + `facebook/sam3`.
+
+---
 
 ## Guiding Principles
-1. **Inversion of Control**: The pipeline asks the user for a `Task` + `Model` combination; it does not hardcode them.
-2. **Registry Pattern**: Models, tasks, datasets, and prompts are registered by name and instantiated from config.
-3. **Config-Driven**: A single YAML/JSON config file defines the entire experiment (model IDs, task list, dataset paths, prompts).
-4. **Backend Agnostic**: Support both `transformers`-based local models and REST API-based cloud models through a unified interface.
-5. **Backward Compatibility**: Existing ISRO-GeoNLI code lives in `adapters/` and can be used out-of-the-box.
+
+1. **Inversion of Control** — The user assembles `Task` + `Model` combinations; the pipeline does not hardcode them.
+2. **Registry Pattern** — Models, tasks, datasets, and prompts are registered by string name and instantiated from config.
+3. **Config-Driven** — One YAML/JSON file defines the entire experiment.
+4. **Backend Agnostic** — Works with local `transformers` models and REST API-based cloud models through a unified `VLMBase` interface.
+5. **Prompt-First** — Every system prompt, router instruction, and agent example lives in external `.txt` files. Zero hardcoded strings in Python.
+6. **Backward Compatible** — Existing ISRO-GeoNLI code lives in `adapters/` and is usable out-of-the-box.
+
+---
 
 ## Package Layout
 
 ```
 geonli/
 ├── core/
-│   ├── base.py          # Abstract base classes (Task, Model, Pipeline, Dataset)
-│   ├── registry.py      # Global registries for plugins
-│   ├── config.py        # Pydantic config schemas
-│   └── pipeline.py      # Generic GeoNLIPipeline orchestrator
+│   ├── base.py              # Abstract contracts: VLMBase, TransformersVLMBase,
+│   │                        #   SegmenterBase, TaskBase, AgentBase, GeoNLIPipeline
+│   ├── registry.py          # @register_* decorators + get_* lookup functions
+│   ├── config.py            # Pydantic ExperimentConfig with YAML/JSON loaders
+│   └── pipeline_impl.py     # DefaultGeoNLIPipeline (wires tasks + shared context)
 ├── models/
-│   ├── base.py          # VLMBase, SegmenterBase
-│   ├── transformers_models.py  # Qwen3-VL, LLaVA, etc.
-│   ├── api_models.py    # OpenAI, Gemini, Claude adapters
-│   └── sam_backends.py  # SAM3, SAM2, dummy segmenter
+│   ├── base.py              # DummyVLM, DummySegmenter (for CI/testing)
+│   ├── huggingface.py       # HuggingFaceVLM: auto-detects Qwen/LLaVA/InternVL/Idefics
+│   ├── huggingface_sam.py   # HuggingFaceSAM: SAM-vit-huge / SAM2 via AutoProcessor
+│   └── huggingface_sam3.py  # HuggingFaceSAM3: facebook/sam3 (text-prompted)
 ├── tasks/
-│   ├── base.py          # Task base classes
-│   ├── captioning.py    # Generic CaptioningTask
-│   ├── grounding.py     # Generic GroundingTask
-│   └── vqa.py           # Generic VQATask with pluggable router & agent
+│   ├── captioning.py        # CaptioningTask (external prompt template)
+│   ├── grounding.py         # GroundingTask (extraction → segment → OBB + geometry →
+│   │                        #   VLM selection → fallback → visualization)
+│   ├── vqa.py               # VQATask (LLM router + VLM path / SAM+Agent path)
+│   └── agent.py             # TransformersSatelliteAgent (4 tools, multi-step loop)
 ├── datasets/
-│   ├── base.py          # Dataset base + collators
-│   ├── json_dataset.py  # Load from JSON/JSONL (GeoNLI format)
-│   └── image_folder.py  # Folder-based dataset
+│   ├── base.py              # JsonGeoNLIDataset (GeoNLI JSON format)
+│   ├── huggingface_dataset.py  # Any HF datasets.Dataset
+│   ├── csv_dataset.py       # CSV/TSV with configurable columns
+│   └── image_folder.py      # Images + JSON sidecars
 ├── prompts/
-│   ├── manager.py       # Prompt template manager
-│   └── templates/       # YAML prompt banks
+│   ├── manager.py           # PromptManager loads .txt / .yaml / .json banks
+│   └── templates/           # All external prompt files (zero hardcoded fallbacks)
+│       ├── default_caption.txt
+│       ├── default_grounding_extraction.txt
+│       ├── default_router.txt
+│       ├── vqa_numeric.txt
+│       ├── vqa_binary.txt
+│       ├── vqa_semantic.txt
+│       └── satellite_agent.txt
 ├── configs/
-│   ├── default.yaml
-│   └── examples/
+│   ├── default.yaml         # Dummy-mode config (no GPU needed)
+│   ├── example_hf.yaml      # Real HF VLM (Qwen3-VL) config
+│   └── example_isro.yaml    # Backward-compatible ISRO adapter config
+├── adapters/
+│   └── isro_geonli.py       # Bridges to existing ISRO-GeoNLI monolithic code
 ├── cli/
-│   ├── run.py           # geonli-run
-│   ├── train.py         # geonli-train
-│   └── eval.py          # geonli-eval
-├── adapters/            # Bridges to existing ISRO-GeoNLI code
-│   └── isro_geonli.py
+│   └── run.py               # geonli-run --config <path> [--prompt-dir <path>]
 └── utils/
-    └── viz.py
+    ├── geo.py               # mask_to_obb (OpenCV-based, no model deps)
+    └── satellite_tools.py   # select_object_by_rank, calculate_distance_by_indices,
+                             #   calculator_tool (used by agent)
 ```
+
+---
 
 ## Core Abstractions
 
-### 1. Model Interface
+### 1. VLMBase — Any Vision-Language Model
+
 ```python
 class VLMBase(ABC):
     @abstractmethod
-    def query(self, image: Image.Image | None, prompt: str, **kwargs) -> str: ...
+    def query(self, image: Image.Image | None, prompt: str,
+              system_prompt: str | None = None, max_tokens: int = 512,
+              temperature: float = 0.0, **kwargs) -> str: ...
 
+class TransformersVLMBase(VLMBase):
+    model: Any          # raw HF model
+    processor: Any      # raw HF processor
+    device: Any
+    @abstractmethod
+    def chat_generate(self, messages: list[dict], max_new_tokens: int = 512,
+                      temperature: float = 0.0, **kwargs) -> str: ...
+```
+
+`TransformersVLMBase` exposes raw `.model` / `.processor` needed by the multi-turn tool-calling agent.
+
+### 2. SegmenterBase — Any Segmentation Model
+
+```python
 class SegmenterBase(ABC):
     @abstractmethod
-    def segment(self, image: Image.Image, text_prompt: str, **kwargs) -> SegmentationResult: ...
+    def segment(self, image: Image.Image, text_prompt: str,
+                **kwargs) -> SegmentationResult | None: ...
 ```
 
-### 2. Task Interface
+### 3. TaskBase — Any Task
+
 ```python
 class TaskBase(ABC):
+    name: str
     @abstractmethod
-    def run(self, image: Image.Image, query: str, context: dict | None = None) -> TaskResult: ...
+    def run(self, image: Image.Image, query: str,
+            context: dict | None = None) -> TaskResult: ...
 ```
 
-### 3. Dataset Interface
+### 4. Registry — Plugin-Style Extension
+
 ```python
-class GeoNLIDataset(ABC, Dataset):
-    @abstractmethod
-    def __getitem__(self, idx) -> dict:
-        # Must return {"image": PIL.Image, "queries": {...}, "metadata": {...}}
+@register_vlm("huggingface")
+class HuggingFaceVLM(TransformersVLMBase): ...
+
+@register_task("grounding")
+class GroundingTask(TaskBase): ...
+
+@register_dataset("csv_dataset")
+class CSVGeoNLIDataset(GeoNLIDataset): ...
 ```
 
-### 4. Registry
-All components register themselves:
+Components are then instantiated from config by name:
 ```python
-@register_vlm("qwen3-vl-8b")
-class Qwen3VL(VLMBase): ...
-
-@register_task("captioning")
-class CaptioningTask(TaskBase): ...
+vlm = get_vlm("huggingface", model_id="Qwen/Qwen3-VL-8B-Instruct")
 ```
 
-## Configuration Schema (Pydantic)
+---
 
+## GroundingTask Pipeline (Tested)
+
+1. **Target Extraction** — VLM turns user description into a noun phrase via external prompt template.
+2. **Segmentation** — Segmenter receives `"tree"` and returns N binary masks.
+3. **OBB + Geometric Features** — For each mask:
+   - `cv2.findContours` → `cv2.minAreaRect` → 8-point OBB
+   - Width, Height, Area, Aspect Ratio, Angle, Compactness
+   - Normalized relative coordinates (0–1000)
+4. **Annotated Image** — Colored mask overlays + numeric IDs + 10×10 magenta/cyan grid
+5. **VLM Selection** — Annotated image + geometric features fed back to VLM; VLM returns mask IDs
+6. **Fallback** — If segmenter returns 0 masks, VLM Direct Localization parses coordinates directly
+7. **Visualization** (optional) — Matplotlib with green final boxes + yellow dashed candidates
+
+**Test result on A100** (SAM3 + Qwen3-VL, query `"Locate all trees."`):
+- SAM3: 19 masks detected
+- OBB extraction: all valid
+- VLM selection: 4 best trees chosen
+- Output: 4 `Detection` objects with real OBB coordinates
+
+---
+
+## VQATask Pipeline (Tested)
+
+### Routing
+
+| Router | Requires | Used When |
+|--------|----------|-----------|
+| `LLMRouter` | Any `VLMBase` (via `.query()`) | External prompt template `default_router.txt` is registered |
+| `KeywordRouter` | None | Fallback if template missing |
+
+Router decides `"SAM"` or `"VLM"` per question.
+
+### VLM Path
+
+Direct `.query()` with type-specific external system prompt (`vqa_numeric.txt`, `vqa_binary.txt`, `vqa_semantic.txt`).
+
+### SAM + Agent Path
+
+`TransformersSatelliteAgent` runs a multi-step loop:
+
+- **Tool schema** (external `satellite_agent.txt`):
+  - `detect_objects(target_class)`
+  - `get_object_info(sort_attribute, rank_index, return_attribute)`
+  - `measure_distance(index_1, index_2)`
+  - `calculate(expression)`
+
+- **Loop**: VLM generates → parse JSON tool call → execute → append observation → repeat until final answer.
+
+- **Zero-object handling**: Agent correctly answers `0` / `No` when `detect_objects` returns empty.
+
+**Test result on A100** (Qwen3-VL):
+- `"How many buildings?"` → Agent → `detect_objects("building")` → `0`
+- `"Is there water?"` → Agent → `detect_objects("water body")` → `No`
+
+---
+
+## HuggingFaceVLM: Family Auto-Detection
+
+```python
+vlm = get_vlm("huggingface", model_id="Qwen/Qwen3-VL-8B-Instruct")
+# Detects "qwen" → uses qwen_vl_utils.process_vision_info()
+
+vlm = get_vlm("huggingface", model_id="liuhaotian/llava-v1.6-vicuna-7b")
+# Detects "llava" → uses LLaVA-style processor(text, images=...)
+```
+
+Supported families: `qwen`, `llava`, `internvl`, `idefics`, `generic`.
+
+Architecture override:
 ```yaml
-# config.yaml
-experiment_name: "my_geonli_run"
-
-device: "cuda"
-seed: 42
-
 models:
   vlm:
-    name: "qwen3-vl-8b"          # registered name
-    model_id: "Qwen/Qwen3-VL-8B-Instruct"
-    device: "cuda"
-    torch_dtype: "float16"
-  segmenter:
-    name: "sam3"
-    model_id: "facebook/sam3"
-    device: "cuda"
-
-tasks:
-  - name: "captioning"
-    enabled: true
-    prompt_template: "default_caption"
-    max_tokens: 512
-  - name: "grounding"
-    enabled: true
-    score_threshold: 0.4
-    fallback_to_vlm: true
-  - name: "vqa"
-    enabled: true
-    router_type: "auto"          # auto, sam, vlm
-
-dataset:
-  name: "json_dataset"
-  input_json: "path/to/query.json"
-  image_root: "path/to/images/"
-  batch_size: 1
-
-output:
-  save_dir: "./outputs"
-  format: "json"                # json, csv, wandb
+    name: "huggingface"
+    model_id: "..."
+    architecture: "llava"   # force detection
 ```
 
-## CLI Usage
+---
 
+## Prompt-First Design
+
+**Rule:** If a prompt template is referenced in config but missing from the prompt bank, the code **raises `KeyError`** — never silently falls back to a hardcoded string.
+
+Implementation:
+- `PromptManager` scans `geonli/prompts/templates/*.txt` at startup
+- `get_prompt("default_caption")` returns the raw string
+- Tasks call `get_prompt(self.prompt_template)` directly
+
+Custom prompts:
 ```bash
-# Install
-pip install geonli
+geonli-run --config my_config.yaml --prompt-dir ./my_custom_prompts/
+```
+Custom `.txt` files in `./my_custom_prompts/` override or extend built-ins.
 
-# Run inference from config
-geonli-run --config configs/my_exp.yaml
+---
 
-# Run with overrides
-geonli-run --config configs/default.yaml \
-           --override models.vlm.name=gemini-1.5-flash \
-           --override tasks.grounding.enabled=false
+## Config Schema (Pydantic)
 
-# Train / Fine-tune
-geonli-train --config configs/train_lora.yaml --dataset my_dataset
+```python
+class ExperimentConfig(BaseModel):
+    experiment_name: str
+    device: str
+    seed: int
+    models: dict[str, ModelConfig]
+    tasks: list[TaskConfig]
+    dataset: DatasetConfig | None
+    output: OutputConfig
 
-# Evaluate
-geonli-eval --preds outputs/preds.json --gt outputs/gt.json
+    @classmethod
+    def from_yaml(cls, path: str) -> "ExperimentConfig": ...
 ```
 
-## Migration Strategy for Existing Code
+Loaded from YAML with optional `--override key.subkey=value` CLI flags.
 
-1. **Phase 1**: Build `geonli/core/` abstract layer and `geonli/adapters/isro_geonli.py` that wraps the current `rs_pipeline.py`, ` tasks/`, and `model/` code.
-2. **Phase 2**: Refactor hardcoded prompts into `geonli/prompts/templates/`.
-3. **Phase 3**: Add new model backends (API-only VLMs, SAM2) without touching task logic.
-4. **Phase 4**: Move dataset curation scripts into `geonli/datasets/` as registered loaders.
+---
+
+## Backward Compatibility
+
+The `adapters/isro_geonli.py` module wraps the existing monolithic code:
+
+- `ISRO_VLM` → wraps `VLMInterface` (Qwen3-VL + LoRA)
+- `ISRO_Segmenter` → wraps `SAM3Interface`
+- `ISROCaptioningTask`, `ISROGroundingTask`, `ISROVQATask` → thin wrappers around original task classes
+
+This means existing users can migrate to the new config-driven package gradually without rewriting their models.
+
+---
 
 ## Why This Design?
 
-| Problem in Current Code | Package Solution |
-|------------------------|------------------|
-| Hardcoded Qwen3-VL + SAM3 | `VLMBase` / `SegmenterBase` with registry |
-| Prompts scattered in `.py` files | `PromptManager` loading YAML templates |
-| No dataset abstraction | `GeoNLIDataset` base + JSON / folder / HuggingFace loaders |
+| Problem in Monolithic ISRO-GeoNLI | Package Solution |
+|-----------------------------------|------------------|
+| Hardcoded Qwen3-VL + SAM3 | `VLMBase` / `SegmenterBase` + registry |
+| Prompts scattered in `.py` files | `PromptManager` loading external `.txt` templates |
+| No dataset abstraction | `GeoNLIDataset` base + JSON / HF / CSV / folder loaders |
 | Monolithic pipeline | `GeoNLIPipeline` injects tasks; tasks inject models |
-| Hard to add a new model | Implement 2 methods (`query`, `segment`) + `@register_*` |
-| No CLI / config-driven runs | Hydra / Pydantic configs + `geonli-run` entry point |
+| Adding a new model requires editing tasks | Implement 2 methods + `@register_*` |
+| No CLI / config-driven runs | `geonli-run --config <yaml>` with Pydantic validation |
