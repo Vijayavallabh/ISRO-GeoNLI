@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "geonli"
 version = "0.1.1"
 description = "A flexible, pip-installable toolkit for remote-sensing image captioning, grounding, and VQA with pluggable VLMs and segmenters."
-readme = "readme.md"
+readme = "geonli/README.md"
 license = {text = "MIT"}
 authors = [
     {name = "ISRO-GeoNLI Team"}
