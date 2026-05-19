@@ -6,6 +6,14 @@ This means users can continue using their current models/prompts
 while gaining config-driven execution and CLI tools.
 """
 
+import sys
+from pathlib import Path
+
+# Ensure repo root is on sys.path so legacy ISRO modules are importable
+_repo_root = Path(__file__).resolve().parents[2]
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+
 from typing import Any, Dict, List, Optional
 from PIL import Image
 
