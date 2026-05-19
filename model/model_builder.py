@@ -17,10 +17,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def build_vlm_model(
-    model_id="Dinosaur2314/qwen_finetune11", 
+    model_id="Dinosaur2314/qwen_finetune11",
     device="cuda",
     torch_dtype=None,
-    device_map="auto"
+    device_map=None
 ):
     """
     Build and initialize the Vision Language Model.
@@ -53,11 +53,15 @@ def build_vlm_model(
 
     # 3. Load the Base Model first
     # Use eager attention to avoid FlashAttention compatibility issues on older drivers
+    # Default to a single large GPU to avoid sharding onto small cards (e.g. 4 GB T400)
+    if device_map is None:
+        device_map = {"": "cuda:0"} if device != "cpu" else None
+
     try:
         model = Qwen3VLForConditionalGeneration.from_pretrained(
             base_model_id,
             torch_dtype="auto",
-            device_map="auto",
+            device_map=device_map,
             trust_remote_code=True,
             dtype=torch_dtype,
             token=hf_token,
@@ -70,7 +74,7 @@ def build_vlm_model(
                 base_model_id,
                 trust_remote_code=True,
                 torch_dtype=torch_dtype,
-                device_map=device_map if device_map else device,
+                device_map=device_map,
                 token=hf_token,
                 attn_implementation="eager",
             )
