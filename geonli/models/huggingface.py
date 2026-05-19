@@ -75,7 +75,11 @@ class HuggingFaceVLM(TransformersVLMBase):
             return
 
         import torch
-        from transformers import AutoProcessor, AutoModelForVision2Seq
+        from transformers import AutoProcessor
+        try:
+            from transformers import AutoModelForImageTextToText as AutoVLM
+        except ImportError:
+            from transformers import AutoModelForVision2Seq as AutoVLM
 
         dtype_map = {
             "float16": torch.float16,
@@ -97,7 +101,7 @@ class HuggingFaceVLM(TransformersVLMBase):
             **auth,
         )
 
-        self.model = AutoModelForVision2Seq.from_pretrained(
+        self.model = AutoVLM.from_pretrained(
             self.model_id,
             torch_dtype=torch_dtype,
             device_map="auto" if self.device == "cuda" else None,
@@ -192,10 +196,14 @@ class HuggingFaceVLM(TransformersVLMBase):
         inputs = {k: v.to(self.model.device) if isinstance(v, torch.Tensor) else v
                   for k, v in inputs.items()}
 
-        gen_kwargs = {"max_new_tokens": max_new_tokens, "do_sample": temperature > 0}
-        if temperature > 0:
-            gen_kwargs["temperature"] = temperature
-            gen_kwargs["top_k"] = -1
+        if temperature == 0.0:
+            gen_kwargs = {"max_new_tokens": max_new_tokens, "do_sample": False}
+        else:
+            gen_kwargs = {
+                "max_new_tokens": max_new_tokens,
+                "do_sample": True,
+                "temperature": temperature,
+            }
 
         with torch.no_grad():
             generated_ids = self.model.generate(**inputs, **gen_kwargs)

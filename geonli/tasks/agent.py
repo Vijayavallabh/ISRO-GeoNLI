@@ -286,14 +286,28 @@ class TransformersSatelliteAgent(AgentBase):
             return None
 
     def _extract_clean_answer(self, text: str) -> str:
+        clean = text.strip()
+
+        # Strategy 1: find "Final Answer:" anywhere (last occurrence wins)
+        marker_idx = clean.lower().rfind("final answer:")
+        if marker_idx != -1:
+            clean = clean[marker_idx + len("final answer:"):].strip()
+
+        # Strategy 2: find other known prefixes at the start
         prefixes = [
-            "the answer is", "final answer:", "answer:", "result:",
+            "the answer is", "answer:", "result:",
             "there are", "there is", "it is", "yes,", "no,",
         ]
-        clean = text.strip().lower()
+        lowered = clean.lower()
         for prefix in prefixes:
-            if clean.startswith(prefix):
+            if lowered.startswith(prefix):
                 clean = clean[len(prefix):].strip()
+                break
+
+        # Strategy 3: if the text still contains newlines, take the last line
+        if "\n" in clean:
+            clean = clean.split("\n")[-1].strip()
+
         clean = clean.rstrip(".,;:!?")
         if clean and not clean[0].isdigit():
             clean = clean[0].upper() + clean[1:]

@@ -38,4 +38,17 @@ Step 1: {{"tool": "detect_objects", "arguments": {{"target_class": "ship"}}}}
 Observation: Detected 1 'ship' object(s).
 Final Answer: Yes
 
+EXAMPLE 4 - Zero Objects (Numeric):
+User: "How many skyscrapers are there?"
+Step 1: {{"tool": "detect_objects", "arguments": {{"target_class": "skyscraper"}}}}
+Observation: No 'skyscraper' objects detected in the image.
+Final Answer: 0
+
+EXAMPLE 5 - Zero Objects (Binary):
+User: "Is there an airport in the image?"
+Step 1: {{"tool": "detect_objects", "arguments": {{"target_class": "airport"}}}}
+Observation: No 'airport' objects detected in the image.
+Final Answer: No
+
 Remember: Tools have direct access to all metadata. You only need to specify WHICH attribute to retrieve, not HOW to find it.
+If detect_objects returns 0 objects, output the Final Answer immediately. Do NOT call additional tools.
