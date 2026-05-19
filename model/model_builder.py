@@ -4,7 +4,11 @@ For use with Qwen3-VL models like Qwen3-VL-8B.
 """
 
 import torch
-from transformers import Qwen3VLForConditionalGeneration, AutoProcessor, AutoModelForVision2Seq
+from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
+try:
+    from transformers import AutoModelForVision2Seq
+except ImportError:
+    from transformers import AutoModelForImageTextToText as AutoModelForVision2Seq
 from transformers import Sam3Model, Sam3Processor
 from peft import PeftModel
 import os
