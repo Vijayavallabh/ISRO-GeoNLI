@@ -1,1 +1,4 @@
 from geonli.datasets.base import JsonGeoNLIDataset
+from geonli.datasets.huggingface_dataset import HuggingFaceGeoNLIDataset
+from geonli.datasets.csv_dataset import CSVGeoNLIDataset
+from geonli.datasets.image_folder import ImageFolderGeoNLIDataset

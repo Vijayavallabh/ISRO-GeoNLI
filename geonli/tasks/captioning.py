@@ -37,12 +37,8 @@ class CaptioningTask(TaskBase):
         query: str,
         context: Optional[Dict[str, Any]] = None,
     ) -> TaskResult:
-        # Load system prompt from template bank (exact original prompt)
-        system_prompt = None
-        try:
-            system_prompt = get_prompt(self.prompt_template)
-        except KeyError:
-            system_prompt = None
+        # Load system prompt from external template bank (user-customizable)
+        system_prompt = get_prompt(self.prompt_template)
 
         final_caption = self.vlm.query(
             image=image,

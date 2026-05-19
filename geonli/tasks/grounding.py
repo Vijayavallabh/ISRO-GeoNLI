@@ -225,11 +225,7 @@ class GroundingTask(TaskBase):
     def _extract_target_class(self, query: str) -> str:
         logger.info(f"\n[Grounding] Stage 1: Target Extraction for '{query}'")
         try:
-            try:
-                prompt = get_prompt(self.prompt_template).format(query=query)
-            except KeyError:
-                prompt = self._default_extraction_prompt(query)
-
+            prompt = get_prompt(self.prompt_template).format(query=query)
             output_text = self.vlm.query(
                 image=None,
                 prompt=prompt,
@@ -246,22 +242,13 @@ class GroundingTask(TaskBase):
         except Exception as e:
             logger.exception(f"   [Extraction Warning] {e}")
 
-        # Fallback heuristic
+        # Fallback heuristic (language-agnostic, no hardcoded prompt)
         words = query.lower().split()
         filler = {'the', 'a', 'an', 'this', 'that', 'is', 'are', 'in', 'on', 'at', 'of'}
         important = [w for w in words if w not in filler][:6]
         fallback = " ".join(important) if important else "object"
         logger.info(f"   [Extraction Fallback] Using: '{fallback}'")
         return fallback
-
-    def _default_extraction_prompt(self, query: str) -> str:
-        return (
-            f'You are a Remote Sensing Segmentation Specialist.\n'
-            f'Convert the user description into a "Simple Noun Phrase".\n'
-            f'REMOVE spatial words, articles, and verbs.\n'
-            f'USER DESCRIPTION: "{query}"\n'
-            f'OUTPUT (Return ONLY the noun phrase):'
-        )
 
     # ------------------------------------------------------------------
     # Stage 2: Mask -> OBB + geometric features

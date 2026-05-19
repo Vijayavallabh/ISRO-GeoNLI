@@ -4,11 +4,22 @@ seed: 42
 
 models:
   vlm:
+    # Pick ANY registered VLM:
+    #   - "dummy"              : echo mode for testing
+    #   - "huggingface"        : any HF Vision-Language model (Qwen, LLaVA, InternVL, Idefics...)
+    #   - "isro-qwen3-vl"      : your existing fine-tuned Qwen pipeline
+    # API models (you must implement the class and @register_vlm):
+    #   - "openai-gpt4v"
+    #   - "gemini-1.5-flash"
     name: "dummy"
     model_id: null
     device: "cuda"
     torch_dtype: "float16"
+
   segmenter:
+    # Pick ANY registered segmenter:
+    #   - "dummy"
+    #   - "isro-sam3"
     name: "dummy"
     model_id: null
     device: "cuda"
@@ -16,20 +27,34 @@ models:
 tasks:
   - name: "captioning"
     enabled: true
+    # Prompt templates live in geonli/prompts/templates/*.txt
+    # Users can add custom files and reference them here.
     prompt_template: "default_caption"
     max_tokens: 512
     temperature: 0.0
+
   - name: "grounding"
     enabled: true
     prompt_template: "default_grounding_extraction"
     max_tokens: 30
     fallback_to_vlm: true
     score_threshold: 0.4
+    show_visualization: false
+
   - name: "vqa"
     enabled: true
     max_tokens: 128
+    # VQA question-type prompts are also external templates
+    numeric_prompt_template: "vqa_numeric"
+    binary_prompt_template: "vqa_binary"
+    semantic_prompt_template: "vqa_semantic"
 
 dataset:
+  # Pick ANY registered dataset loader:
+  #   - "json_dataset"    : GeoNLI JSON format (sample_query.json)
+  #   - "huggingface"     : any HF datasets.Dataset (e.g. nlphuji/flickr30k)
+  #   - "csv_dataset"     : CSV/TSV with image_path + instruction columns
+  #   - "image_folder"    : folder of images + JSON sidecars
   name: "json_dataset"
   input_json: "sample_query.json"
   image_root: "."

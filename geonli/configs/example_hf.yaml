@@ -1,0 +1,37 @@
+experiment_name: "hf_qwen3vl_demo"
+device: "cuda"
+seed: 42
+
+models:
+  vlm:
+    name: "huggingface"
+    model_id: "Qwen/Qwen3-VL-8B-Instruct"
+    device: "cuda"
+    torch_dtype: "auto"
+    # architecture: auto-detected from model_id (qwen, llava, internvl, generic)
+    # Override with: architecture: "qwen"
+  segmenter:
+    name: "dummy"
+
+tasks:
+  - name: "captioning"
+    enabled: true
+    prompt_template: "default_caption"
+  - name: "grounding"
+    enabled: true
+    prompt_template: "default_grounding_extraction"
+    fallback_to_vlm: true
+  - name: "vqa"
+    enabled: true
+    numeric_prompt_template: "vqa_numeric"
+    binary_prompt_template: "vqa_binary"
+    semantic_prompt_template: "vqa_semantic"
+
+dataset:
+  name: "json_dataset"
+  input_json: "sample_query.json"
+  image_root: "."
+
+output:
+  save_dir: "./outputs_hf"
+  format: "json"

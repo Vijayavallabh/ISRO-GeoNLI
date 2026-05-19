@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from geonli.core.config import ExperimentConfig
 from geonli.core.registry import get_vlm, get_segmenter, get_task, get_dataset
 from geonli.core.pipeline_impl import DefaultGeoNLIPipeline
+from geonli.prompts.manager import PromptManager
 
 
 def build_pipeline_from_config(cfg: ExperimentConfig):
@@ -94,7 +95,15 @@ def main():
     parser = argparse.ArgumentParser(description="GeoNLI Inference Runner")
     parser.add_argument("--config", "-c", required=True, help="Path to YAML/JSON config")
     parser.add_argument("--override", "-o", action="append", default=[], help="Key=value overrides")
+    parser.add_argument("--prompt-dir", "-p", default=None, help="Path to custom prompt templates directory")
     args = parser.parse_args()
+
+    # Load built-in + user prompt templates
+    import geonli
+    builtin_prompt_dir = os.path.join(os.path.dirname(geonli.__file__), "prompts", "templates")
+    PromptManager(builtin_prompt_dir)
+    if args.prompt_dir:
+        PromptManager(args.prompt_dir)
 
     cfg_path = args.config
     if cfg_path.endswith(".yaml") or cfg_path.endswith(".yml"):

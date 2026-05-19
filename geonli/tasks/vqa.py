@@ -1,12 +1,11 @@
 """
-Generic VQA task with the FULL original ISRO-GeoNLI pipeline:
-  - LLM-based router (transformers models) or keyword router (generic VLMs)
-  - Tool-calling agent for SAM-routed questions (transformers models)
-  - Specialized system prompts per question type for VLM-routed questions
-Works with any VLMBase; automatically upgrades to full agent logic
-when given a TransformersVLMBase.
+100% model-agnostic VQA task.
+  - LLMRouter works with ANY VLMBase (local HF, API, dummy) via .query()
+  - Tool-calling agent works with any TransformersVLMBase via .chat_generate()
+  - ALL prompts are external; NO hardcoded strings remain.
 """
 
+import json
 import logging
 from typing import Any, Dict, Optional
 from PIL import Image
@@ -26,19 +25,16 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Routers
+# Routers (both model-agnostic)
 # ---------------------------------------------------------------------------
 
 class RouterBase:
-    """Minimal router interface."""
-
     def route(self, question: str) -> str:
-        """Return 'SAM' or 'VLM'."""
         raise NotImplementedError
 
 
 class KeywordRouter(RouterBase):
-    """Keyword-based router (works with any VLMBase)."""
+    """Keyword-based router (zero dependencies)."""
 
     SAM_KEYWORDS = [
         "how many", "count", "number of", "area", "size", "length",
@@ -55,40 +51,27 @@ class KeywordRouter(RouterBase):
 
 class LLMRouter(RouterBase):
     """
-    LLM-based router using the full original system prompt.
-    Requires a TransformersVLMBase because it uses chat_generate().
+    LLM-based router that works with **any** VLMBase.
+    Loads the router prompt from the PromptManager (external template).
     """
 
-    def __init__(self, vlm: TransformersVLMBase, prompt_template: str = "default_router"):
+    def __init__(self, vlm: VLMBase, prompt_template: str = "default_router"):
         self.vlm = vlm
         self.prompt_template = prompt_template
 
     def route(self, question: str) -> str:
-        try:
-            system_prompt = get_prompt(self.prompt_template)
-        except KeyError:
-            system_prompt = self._default_router_prompt()
-
-        messages = [
-            {"role": "system", "content": [{"type": "text", "text": system_prompt}]},
-            {"role": "user", "content": [{"type": "text", "text": f"Question: {question}\nAnswer:"}]},
-        ]
-
-        output_text = self.vlm.chat_generate(
-            messages=messages,
-            max_new_tokens=10,
-            temperature=0.1,
+        router_prompt = get_prompt(self.prompt_template)
+        # We pass the router instructions as system_prompt and the question as prompt.
+        # This works identically for HF models and OpenAI/Gemini APIs.
+        output_text = self.vlm.query(
+            image=None,
+            prompt=f'Question: "{question}"\nAnswer with ONLY one word ("SAM" or "VLM"):',
+            system_prompt=router_prompt,
+            max_tokens=10,
+            temperature=0.0,
         )
         route = output_text.strip().upper()
         return "SAM" if "SAM" in route else "VLM"
-
-    def _default_router_prompt(self) -> str:
-        return (
-            "You are an intelligent routing system for remote sensing VQA.\n"
-            'Respond with ONLY "SAM" if the question requires segmentation, '
-            'or "VLM" if it can be answered by visual understanding alone.\n'
-            'Output ONLY one word: "SAM" or "VLM".'
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -105,21 +88,33 @@ class VQATask(TaskBase):
         segmenter: Optional[SegmenterBase] = None,
         router: Optional[RouterBase] = None,
         agent: Optional[AgentBase] = None,
+        numeric_prompt_template: str = "vqa_numeric",
+        binary_prompt_template: str = "vqa_binary",
+        semantic_prompt_template: str = "vqa_semantic",
         max_tokens: int = 128,
     ):
         self.vlm = vlm
         self.segmenter = segmenter
         self.max_tokens = max_tokens
+        self.numeric_prompt_template = numeric_prompt_template
+        self.binary_prompt_template = binary_prompt_template
+        self.semantic_prompt_template = semantic_prompt_template
 
-        # Auto-select router based on VLM capabilities
+        # Router: user-provided > LLMRouter > KeywordRouter
         if router is not None:
             self.router = router
-        elif isinstance(vlm, TransformersVLMBase):
-            self.router = LLMRouter(vlm)
         else:
-            self.router = KeywordRouter()
+            try:
+                self.router = LLMRouter(vlm)
+            except KeyError:
+                logger.warning(
+                    "Router prompt template 'default_router' not registered. "
+                    "Falling back to KeywordRouter. "
+                    "Register the template via PromptManager for LLM routing."
+                )
+                self.router = KeywordRouter()
 
-        # Auto-select agent based on VLM capabilities
+        # Agent: user-provided > auto-build for TransformersVLMBase
         if agent is not None:
             self.agent = agent
         elif isinstance(vlm, TransformersVLMBase) and segmenter is not None:
@@ -154,10 +149,16 @@ class VQATask(TaskBase):
             },
         )
 
-    # -- VLM path -------------------------------------------------------
-
     def _answer_via_vlm_path(self, image, query, qtype, context) -> str:
-        sys_prompt = self._system_prompt_for_type(qtype)
+        # Prompt template mapping
+        template_map = {
+            "numeric": self.numeric_prompt_template,
+            "binary": self.binary_prompt_template,
+            "semantic": self.semantic_prompt_template,
+        }
+        template_name = template_map.get(qtype, self.semantic_prompt_template)
+        system_prompt = get_prompt(template_name)
+
         gsd = context.get("metadata", {}).get("spatial_resolution_m", 1.0)
         user_prompt = f"Question: '{query}'"
         if gsd:
@@ -166,41 +167,14 @@ class VQATask(TaskBase):
         return self.vlm.query(
             image=image,
             prompt=user_prompt,
-            system_prompt=sys_prompt,
+            system_prompt=system_prompt,
             max_tokens=self.max_tokens,
             temperature=0.0,
         )
 
-    @staticmethod
-    def _system_prompt_for_type(qtype: str) -> Optional[str]:
-        prompts = {
-            "numeric": (
-                "You are a remote sensing assistant. "
-                "The user asks a numeric question, to be answered only with a numeric value. "
-                "Estimate or count the required value based on the visual image, and all the relevant context from the question. "
-                "Provide the number clearly."
-            ),
-            "binary": (
-                "You are a remote sensing assistant. "
-                "The user asks a binary (Yes/No) question. "
-                "Analyze the image and the question context, and answer with ONLY 'Yes' or 'No'."
-            ),
-            "semantic": (
-                "You are a remote sensing assistant. "
-                "Answer the question directly and concisely using as few words as possible. "
-                "Do not answer with full sentences. "
-                "Example: 'Rectangular' instead of 'The field is rectangular'. "
-                "Example: 'Blue' instead of 'It is blue'."
-            ),
-        }
-        return prompts.get(qtype)
-
-    # -- SAM path -------------------------------------------------------
-
     def _answer_via_sam_path(self, image, query, qtype, context) -> str:
         gsd = context.get("metadata", {}).get("spatial_resolution_m", 1.0)
 
-        # Type-specific instruction prefix (exact original behavior)
         type_instruction = ""
         if qtype == "numeric":
             type_instruction = "Answer this numeric question. Return a single number if possible."

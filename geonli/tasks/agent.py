@@ -1,18 +1,19 @@
 """
-Generic and Transformers-specific multi-step tool-calling agents for SAM-path VQA.
+Generic and Transformers-specific multi-step tool-calling agents.
 
-The ``TransformersSatelliteAgent`` is a port of the original
-``SatelliteVQAAgent`` with the exact same tool schema, loop logic,
-prompt formatting, and tool implementations.
+The ``TransformersSatelliteAgent`` loads its system prompt from the
+external prompt bank (template ``satellite_agent``), making it fully
+customizable without touching Python code.
 """
 
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 from PIL import Image
 
 from geonli.core.base import AgentBase, SegmenterBase, TransformersVLMBase
+from geonli.core.registry import get_prompt
 from geonli.utils.satellite_tools import (
     calculator_tool,
     calculate_distance_by_indices,
@@ -108,16 +109,18 @@ SATELLITE_TOOLS_SCHEMA = [
 class TransformersSatelliteAgent(AgentBase):
     """
     Multi-step tool-calling agent for transformers VLMs.
-    Mirrors the original ``SatelliteVQAAgent`` exactly.
+    Loads the system prompt from the external ``satellite_agent`` template.
     """
 
     def __init__(
         self,
         vlm: TransformersVLMBase,
         segmenter: SegmenterBase,
+        prompt_template: str = "satellite_agent",
     ):
         self.vlm = vlm
         self.sam = segmenter
+        self.prompt_template = prompt_template
         self.tools_schema = SATELLITE_TOOLS_SCHEMA
 
         self.tool_map = {
@@ -127,7 +130,7 @@ class TransformersSatelliteAgent(AgentBase):
             "calculate": self._calculate_wrapper,
         }
 
-        self.image: Optional[Image.Image] = None
+        self.image: Image.Image = None
         self.current_gsd = 1.0
         self.sam_state: Dict[str, Any] = {
             "objects": [],
@@ -137,12 +140,7 @@ class TransformersSatelliteAgent(AgentBase):
         }
 
     def _reset_state(self):
-        self.sam_state = {
-            "objects": [],
-            "masks": None,
-            "count": 0,
-            "image_size": (0, 0),
-        }
+        self.sam_state = {"objects": [], "masks": None, "count": 0, "image_size": (0, 0)}
 
     # -- Tool wrappers -------------------------------------------------
 
@@ -165,10 +163,7 @@ class TransformersSatelliteAgent(AgentBase):
             return f"No '{target_class}' objects detected in the image."
 
     def _get_object_info_wrapper(
-        self,
-        sort_attribute: str,
-        rank_index: int,
-        return_attribute: str = None,
+        self, sort_attribute: str, rank_index: int, return_attribute: str = None
     ) -> str:
         if not self.sam_state["objects"]:
             return "Error: No objects detected. Call 'detect_objects' first."
@@ -211,48 +206,8 @@ class TransformersSatelliteAgent(AgentBase):
 
     def _format_system_prompt(self) -> str:
         tools_json = json.dumps(self.tools_schema, indent=2)
-        prompt = f"""You are a Satellite Image Analysis Agent with access to detection and measurement tools.
-
-AVAILABLE TOOLS:
-{tools_json}
-
-WORKFLOW:
-1. First call 'detect_objects' to find all instances of the target class
-2. Then use 'get_object_info' to query specific attributes
-3. Use 'measure_distance' for spatial measurements between objects
-4. Use 'calculate' for mathematical operations
-
-CRITICAL OUTPUT RULES:
-1. After calling tools, respond with ONLY the final answer - no explanation
-2. Format based on question type:
-   - NUMERIC: Just the number (e.g., "450.5" or "3")
-   - BINARY: Just "Yes" or "No"
-   - SEMANTIC: Just 1-2 words (e.g., "rectangular" or "north")
-3. Do NOT write sentences like "The answer is..." or "There are..."
-4. Do NOT add units or punctuation to the final answer
-
-EXAMPLE 1 - Numeric Question:
-User: "How many buildings are there?"
-Step 1: {{"tool": "detect_objects", "arguments": {{"target_class": "building"}}}}
-Observation: Detected 5 'building' object(s). Indices: 0 to 4.
-Final Answer: 5
-
-EXAMPLE 2 - Semantic Question:
-User: "What is the shape of the largest building?"
-Step 1: {{"tool": "detect_objects", "arguments": {{"target_class": "building"}}}}
-Observation: Detected 3 'building' object(s). Indices: 0 to 2.
-Step 2: {{"tool": "get_object_info", "arguments": {{"sort_attribute": "area", "rank_index": -1, "return_attribute": "shape"}}}}
-Observation: rectangular
-Final Answer: rectangular
-
-EXAMPLE 3 - Binary Question:
-User: "Is there a ship in the image?"
-Step 1: {{"tool": "detect_objects", "arguments": {{"target_class": "ship"}}}}
-Observation: Detected 1 'ship' object(s).
-Final Answer: Yes
-
-Remember: Tools have direct access to all metadata. You only need to specify WHICH attribute to retrieve, not HOW to find it."""
-        return prompt
+        raw_template = get_prompt(self.prompt_template)
+        return raw_template.format(tools_json=tools_json)
 
     # -- Main loop -----------------------------------------------------
 
@@ -270,17 +225,8 @@ Remember: Tools have direct access to all metadata. You only need to specify WHI
         system_prompt = self._format_system_prompt()
 
         messages = [
-            {
-                "role": "system",
-                "content": [{"type": "text", "text": system_prompt}],
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": image},
-                    {"type": "text", "text": user_query},
-                ],
-            },
+            {"role": "system", "content": [{"type": "text", "text": system_prompt}]},
+            {"role": "user", "content": [{"type": "image", "image": image}, {"type": "text", "text": user_query}]},
         ]
 
         logger.info(f"\n{'=' * 60}")
@@ -320,8 +266,6 @@ Remember: Tools have direct access to all metadata. You only need to specify WHI
 
         logger.warning("Max steps reached without final answer")
         return {"error": "Max steps reached without producing final answer", "steps_taken": max_steps}
-
-    # -- Parsing -------------------------------------------------------
 
     def _parse_and_execute_tool(self, text: str) -> Union[Dict, None]:
         try:
