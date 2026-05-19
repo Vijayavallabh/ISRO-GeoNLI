@@ -1,0 +1,136 @@
+"""
+CLI entry point: ``geonli-run --config <path>``
+"""
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+# Ensure repo root on path so adapters can import ISRO code
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from geonli.core.config import ExperimentConfig
+from geonli.core.registry import get_vlm, get_segmenter, get_task, get_dataset
+from geonli.core.pipeline_impl import DefaultGeoNLIPipeline
+
+
+def build_pipeline_from_config(cfg: ExperimentConfig):
+    """Instantiate models, tasks, and pipeline from an ExperimentConfig."""
+    # -- Models -----------------------------------------------------------
+    vlm_cfg = cfg.models.get("vlm")
+    seg_cfg = cfg.models.get("segmenter")
+
+    vlm = get_vlm(vlm_cfg.name, **{**vlm_cfg.model_dump(), **vlm_cfg.extra}) if vlm_cfg else None
+    segmenter = get_segmenter(seg_cfg.name, **{**seg_cfg.model_dump(), **seg_cfg.extra}) if seg_cfg else None
+
+    # -- Tasks ------------------------------------------------------------
+    tasks = []
+    for t_cfg in cfg.tasks:
+        if not t_cfg.enabled:
+            continue
+        if t_cfg.name == "captioning":
+            tasks.append(get_task("captioning", vlm=vlm, **t_cfg.model_dump()))
+        elif t_cfg.name == "grounding":
+            tasks.append(get_task("grounding", vlm=vlm, segmenter=segmenter, **t_cfg.model_dump()))
+        elif t_cfg.name == "vqa":
+            tasks.append(get_task("vqa", vlm=vlm, segmenter=segmenter, **t_cfg.model_dump()))
+        else:
+            # Generic lookup via registry
+            tasks.append(get_task(t_cfg.name, vlm=vlm, segmenter=segmenter, **t_cfg.model_dump()))
+
+    return DefaultGeoNLIPipeline(tasks=tasks, vlm=vlm, segmenter=segmenter)
+
+
+def run_inference(cfg: ExperimentConfig):
+    pipeline = build_pipeline_from_config(cfg)
+    dataset = None
+    if cfg.dataset:
+        dataset = get_dataset(cfg.dataset.name, **cfg.dataset.model_dump())
+
+    if dataset is None:
+        print("No dataset configured. Use --config with a dataset section.")
+        sys.exit(1)
+
+    out_dir = Path(cfg.output.save_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    all_results = []
+
+    for idx in range(len(dataset)):
+        sample = dataset[idx]
+        image_id = sample["image_id"]
+        print(f"[{idx+1}/{len(dataset)}] Processing {image_id} ...")
+        results = pipeline.run(
+            image=sample["image"],
+            queries=sample["queries"],
+            metadata=sample.get("metadata"),
+        )
+        serializable = {k: {"query": v.query, "response": _serialize(v.response), "metadata": v.metadata}
+                        for k, v in results.items()}
+        record = {
+            "image_id": image_id,
+            "metadata": sample.get("metadata", {}),
+            "results": serializable,
+        }
+        all_results.append(record)
+
+    out_path = out_dir / "results.json"
+    with open(out_path, "w") as f:
+        json.dump(all_results, f, indent=2)
+    print(f"\nSaved results -> {out_path}")
+
+
+def _serialize(obj):
+    """Make TaskResult.response JSON-serializable."""
+    if hasattr(obj, "__dict__"):
+        return obj.__dict__
+    if isinstance(obj, list) and obj and hasattr(obj[0], "__dict__"):
+        return [o.__dict__ for o in obj]
+    return obj
+
+
+def main():
+    parser = argparse.ArgumentParser(description="GeoNLI Inference Runner")
+    parser.add_argument("--config", "-c", required=True, help="Path to YAML/JSON config")
+    parser.add_argument("--override", "-o", action="append", default=[], help="Key=value overrides")
+    args = parser.parse_args()
+
+    cfg_path = args.config
+    if cfg_path.endswith(".yaml") or cfg_path.endswith(".yml"):
+        cfg = ExperimentConfig.from_yaml(cfg_path)
+    else:
+        cfg = ExperimentConfig.from_json(cfg_path)
+
+    # Simple dot-path overrides: key.subkey=value
+    for ov in args.override:
+        if "=" not in ov:
+            continue
+        key_path, val = ov.split("=", 1)
+        _set_nested(cfg, key_path, val)
+
+    run_inference(cfg)
+
+
+def _set_nested(obj, key_path: str, val: str):
+    """Crude override utility; for production use Hydra or OmegaConf."""
+    keys = key_path.split(".")
+    for k in keys[:-1]:
+        obj = getattr(obj, k, None)
+        if obj is None:
+            return
+    # Try int/float/bool, else str
+    casted = val
+    for caster in (int, float):
+        try:
+            casted = caster(val)
+            break
+        except ValueError:
+            pass
+    if val.lower() in ("true", "false"):
+        casted = val.lower() == "true"
+    setattr(obj, keys[-1], casted)
+
+
+if __name__ == "__main__":
+    main()

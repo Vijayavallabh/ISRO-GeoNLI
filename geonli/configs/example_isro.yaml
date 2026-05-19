@@ -1,0 +1,44 @@
+experiment_name: "isro_geonli_full"
+device: "cuda"
+seed: 42
+
+models:
+  vlm:
+    name: "isro-qwen3-vl"
+    model_id: "Dinosaur2314/qwen_finetune11"
+    device: "cuda"
+    torch_dtype: "float16"
+  segmenter:
+    name: "isro-sam3"
+    model_id: "facebook/sam3"
+    device: "cuda"
+    spatial_resolution_m: 1.57
+
+tasks:
+  - name: "captioning"
+    enabled: true
+    prompt_template: "default_caption"
+    max_tokens: 512
+    temperature: 0.0
+  - name: "grounding"
+    enabled: true
+    prompt_template: "default_grounding_extraction"
+    max_tokens: 30
+    fallback_to_vlm: true
+    score_threshold: 0.4
+    show_visualization: false
+  - name: "vqa"
+    enabled: true
+    max_tokens: 128
+
+dataset:
+  name: "json_dataset"
+  input_json: "sample_query.json"
+  image_root: "."
+  batch_size: 1
+  num_workers: 0
+
+output:
+  save_dir: "./outputs"
+  format: "json"
+  log_wandb: false

@@ -1,0 +1,42 @@
+experiment_name: "geonli_default"
+device: "cuda"
+seed: 42
+
+models:
+  vlm:
+    name: "dummy"
+    model_id: null
+    device: "cuda"
+    torch_dtype: "float16"
+  segmenter:
+    name: "dummy"
+    model_id: null
+    device: "cuda"
+
+tasks:
+  - name: "captioning"
+    enabled: true
+    prompt_template: "default_caption"
+    max_tokens: 512
+    temperature: 0.0
+  - name: "grounding"
+    enabled: true
+    prompt_template: "default_grounding_extraction"
+    max_tokens: 30
+    fallback_to_vlm: true
+    score_threshold: 0.4
+  - name: "vqa"
+    enabled: true
+    max_tokens: 128
+
+dataset:
+  name: "json_dataset"
+  input_json: "sample_query.json"
+  image_root: "."
+  batch_size: 1
+  num_workers: 0
+
+output:
+  save_dir: "./outputs"
+  format: "json"
+  log_wandb: false
